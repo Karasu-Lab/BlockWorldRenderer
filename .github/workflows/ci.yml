@@ -10,53 +10,32 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Test
+  build:
+    name: Test and build WebAssembly
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
         with:
-          components: rustfmt, clippy
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: nix develop -c cargo fmt --all -- --check
 
       - name: Lint
-        run: cargo clippy --all-targets -- -D warnings
+        run: nix develop -c cargo clippy --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test
-
-  build-wasm:
-    name: Build WebAssembly
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: wasm32-unknown-unknown
-
-      - name: Install wasm-bindgen CLI
-        uses: taiki-e/install-action@wasm-bindgen
+        run: nix develop -c cargo test
 
       - name: Build for wasm32-unknown-unknown
-        run: cargo build --release --target wasm32-unknown-unknown
+        run: nix develop -c cargo build --release --target wasm32-unknown-unknown
 
       - name: Generate JavaScript bindings
-        run: wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
+        run: nix develop -c wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
 
       - name: Upload WebAssembly package
         uses: actions/upload-artifact@v4
