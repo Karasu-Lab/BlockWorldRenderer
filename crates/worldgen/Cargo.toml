@@ -1,0 +1,11 @@
+[package]
+name = "bwr-worldgen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bwr-block = { version = "0.1.0", path = "../block" }
+bwr-random = { version = "0.1.0", path = "../random" }
+bwr-registry = { version = "0.1.0", path = "../registry" }
+bwr-seed = { version = "0.1.0", path = "../seed" }
+thiserror = "2.0.21"

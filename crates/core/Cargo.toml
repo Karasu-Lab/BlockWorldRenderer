@@ -1,0 +1,72 @@
+[package]
+name = "bwr-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bwr-block = { version = "0.1.0", path = "../block", optional = true }
+bwr-camera = { version = "0.1.0", path = "../camera", optional = true }
+bwr-data = { version = "0.1.0", path = "../data", optional = true }
+bwr-datacomponent = { version = "0.1.0", path = "../datacomponent", optional = true }
+bwr-downloader = { version = "0.1.0", path = "../downloader", optional = true }
+bwr-entity = { version = "0.1.0", path = "../entity", optional = true }
+bwr-item = { version = "0.1.0", path = "../item", optional = true }
+bwr-network = { version = "0.1.0", path = "../network", optional = true }
+bwr-random = { version = "0.1.0", path = "../random", optional = true }
+bwr-registry = { version = "0.1.0", path = "../registry", optional = true }
+bwr-renderer = { version = "0.1.0", path = "../renderer", optional = true }
+bwr-resourcepack = { version = "0.1.0", path = "../resourcepack", optional = true }
+bwr-seed = { version = "0.1.0", path = "../seed", optional = true }
+bwr-serializer = { version = "0.1.0", path = "../serializer", optional = true }
+bwr-server = { version = "0.1.0", path = "../server", optional = true }
+bwr-shader = { version = "0.1.0", path = "../shader", optional = true }
+bwr-storage = { version = "0.1.0", path = "../storage", optional = true }
+bwr-utils = { version = "0.1.0", path = "../utils", optional = true }
+bwr-worldgen = { version = "0.1.0", path = "../worldgen", optional = true }
+bwr-worldtick = { version = "0.1.0", path = "../worldtick", optional = true }
+
+[features]
+default = []
+full = [
+    "block",
+    "camera",
+    "data",
+    "datacomponent",
+    "downloader",
+    "entity",
+    "item",
+    "network",
+    "random",
+    "registry",
+    "renderer",
+    "resourcepack",
+    "seed",
+    "serializer",
+    "server",
+    "shader",
+    "storage",
+    "utils",
+    "worldgen",
+    "worldtick",
+]
+block = ["dep:bwr-block", "registry"]
+camera = ["dep:bwr-camera"]
+data = ["dep:bwr-data", "datacomponent", "registry", "serializer", "resourcepack", "worldgen"]
+datacomponent = ["dep:bwr-datacomponent", "registry", "serializer"]
+downloader = ["dep:bwr-downloader", "resourcepack", "serializer"]
+downloader-cli = ["downloader", "bwr-downloader/cli"]
+entity = ["dep:bwr-entity", "registry", "datacomponent"]
+item = ["dep:bwr-item", "registry", "datacomponent"]
+network = ["dep:bwr-network", "serializer"]
+random = ["dep:bwr-random"]
+registry = ["dep:bwr-registry"]
+renderer = ["dep:bwr-renderer", "camera", "shader", "resourcepack", "block"]
+resourcepack = ["dep:bwr-resourcepack", "registry", "serializer"]
+seed = ["dep:bwr-seed", "random"]
+serializer = ["dep:bwr-serializer"]
+server = ["dep:bwr-server", "network", "worldtick", "worldgen", "storage", "entity", "registry"]
+shader = ["dep:bwr-shader", "resourcepack"]
+storage = ["dep:bwr-storage", "registry", "serializer"]
+utils = ["dep:bwr-utils"]
+worldgen = ["dep:bwr-worldgen", "seed", "random", "block", "registry"]
+worldtick = ["dep:bwr-worldtick", "entity"]
