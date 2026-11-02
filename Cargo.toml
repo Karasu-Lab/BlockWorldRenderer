@@ -1,5 +1,5 @@
 [workspace]
-members = [".", "crates/*"]
+members = ["crates/*"]
 exclude = ["third_party"]
 resolver = "3"
 
@@ -12,7 +12,19 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-bwr-core = { version = "0.1.0", path = "crates/core" }
+core = { version = "0.1.0", path = "crates/core", features = ["canvas", "settings", "ui", "wgpu", "worldgen"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
 # Pinned to the wasm-bindgen-cli version provided by flake.nix,
 # because the CLI only accepts the exact schema version it was built for.
 wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = ["HtmlCanvasElement"]
+
+# SteelMC (through pomme-singleplayer) needs a copy of simdnbt that builds on
+# 32-bit targets; see third_party/Client/third_party/SteelMC/vendor/simdnbt/VENDORED.md.
+[patch.crates-io]
+simdnbt = { path = "third_party/Client/third_party/SteelMC/vendor/simdnbt" }

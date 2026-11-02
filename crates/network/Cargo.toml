@@ -1,8 +1,8 @@
 [package]
-name = "bwr-network"
+name = "network"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-serializer = { version = "0.1.0", path = "../serializer" }
+serializer = { version = "0.1.0", path = "../serializer" }
 thiserror = "2.0.21"

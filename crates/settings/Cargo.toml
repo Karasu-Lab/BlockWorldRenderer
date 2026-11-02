@@ -1,0 +1,10 @@
+[package]
+name = "settings"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+camera = { version = "0.1.0", path = "../camera" }
+seed = { version = "0.1.0", path = "../seed" }
+utils = { version = "0.1.0", path = "../utils" }
+thiserror = "2.0.21"

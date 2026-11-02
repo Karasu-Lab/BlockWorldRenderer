@@ -1,4 +1,4 @@
-use bwr_resourcepack::{ResourceKey, ResourcePackError, ResourceProvider};
+use resourcepack::{ResourceKey, ResourcePackError, ResourceProvider};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

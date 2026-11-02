@@ -1,0 +1,8 @@
+[package]
+name = "debugger"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ui = { version = "0.1.0", path = "../ui" }
+thiserror = "2.0.21"

@@ -29,19 +29,19 @@ jobs:
         run: nix develop -c cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Lint the downloader CLI
-        run: nix develop -c cargo clippy -p bwr-downloader --all-targets --features cli -- -D warnings
+        run: nix develop -c cargo clippy -p downloader --all-targets --features cli -- -D warnings
 
       - name: Test
         run: nix develop -c cargo test --workspace
 
       - name: Test the downloader CLI
-        run: nix develop -c cargo test -p bwr-downloader --features cli
+        run: nix develop -c cargo test -p downloader --features cli
 
       - name: Build core without features
-        run: nix develop -c cargo build -p bwr-core --no-default-features
+        run: nix develop -c cargo build -p core --no-default-features
 
       - name: Build core with all features
-        run: nix develop -c cargo build -p bwr-core --all-features
+        run: nix develop -c cargo build -p core --all-features
 
       - name: Build for wasm32-unknown-unknown
         run: nix develop -c cargo build --release --target wasm32-unknown-unknown
@@ -55,3 +55,18 @@ jobs:
           name: block-world-renderer-wasm
           path: pkg/
           if-no-files-found: error
+
+      - name: Install web dependencies
+        run: nix develop -c pnpm --dir apps/web install --frozen-lockfile
+
+      - name: Copy the WebAssembly package into the web app
+        run: nix develop -c pnpm --dir apps/web run sync-wasm
+
+      - name: Lint the web app
+        run: nix develop -c pnpm --dir apps/web run lint
+
+      - name: Type-check the web app
+        run: nix develop -c pnpm --dir apps/web run typecheck
+
+      - name: Build the web app
+        run: nix develop -c pnpm --dir apps/web run build

@@ -1,11 +1,11 @@
 [package]
-name = "bwr-downloader"
+name = "downloader"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-resourcepack = { version = "0.1.0", path = "../resourcepack" }
-bwr-serializer = { version = "0.1.0", path = "../serializer" }
+resourcepack = { version = "0.1.0", path = "../resourcepack" }
+serializer = { version = "0.1.0", path = "../serializer" }
 clap = { version = "4.6.7", features = ["derive"], optional = true }
 clap_complete = { version = "4.6.11", optional = true }
 thiserror = "2.0.21"

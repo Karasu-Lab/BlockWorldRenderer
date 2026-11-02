@@ -1,10 +1,10 @@
-use bwr_entity::{Entity, EntityId};
-use bwr_network::{Connection, NetworkError};
-use bwr_registry::ResourceKey;
-use bwr_storage::ChunkStorage;
-use bwr_worldgen::ChunkGenerator;
-use bwr_worldtick::Tick;
+use entity::{Entity, EntityId};
+use network::{Connection, NetworkError};
+use registry::ResourceKey;
+use storage::ChunkStorage;
 use thiserror::Error;
+use worldgen::ChunkGenerator;
+use worldtick::Tick;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PlayerId(pub u64);

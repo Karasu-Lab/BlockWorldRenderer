@@ -1,40 +1,56 @@
 #[cfg(feature = "block")]
-pub use bwr_block as block;
+pub use block;
 #[cfg(feature = "camera")]
-pub use bwr_camera as camera;
+pub use camera;
+#[cfg(feature = "canvas")]
+pub use canvas;
 #[cfg(feature = "data")]
-pub use bwr_data as data;
+pub use data;
 #[cfg(feature = "datacomponent")]
-pub use bwr_datacomponent as datacomponent;
+pub use datacomponent;
+#[cfg(feature = "debugger")]
+pub use debugger;
 #[cfg(feature = "downloader")]
-pub use bwr_downloader as downloader;
+pub use downloader;
 #[cfg(feature = "entity")]
-pub use bwr_entity as entity;
+pub use entity;
 #[cfg(feature = "item")]
-pub use bwr_item as item;
+pub use item;
 #[cfg(feature = "network")]
-pub use bwr_network as network;
+pub use network;
+#[cfg(feature = "particle")]
+pub use particle;
 #[cfg(feature = "random")]
-pub use bwr_random as random;
+pub use random;
 #[cfg(feature = "registry")]
-pub use bwr_registry as registry;
+pub use registry;
 #[cfg(feature = "renderer")]
-pub use bwr_renderer as renderer;
+pub use renderer;
 #[cfg(feature = "resourcepack")]
-pub use bwr_resourcepack as resourcepack;
+pub use resourcepack;
 #[cfg(feature = "seed")]
-pub use bwr_seed as seed;
+pub use seed;
 #[cfg(feature = "serializer")]
-pub use bwr_serializer as serializer;
+pub use serializer;
 #[cfg(feature = "server")]
-pub use bwr_server as server;
+pub use server;
+#[cfg(feature = "settings")]
+pub use settings;
 #[cfg(feature = "shader")]
-pub use bwr_shader as shader;
+pub use shader;
 #[cfg(feature = "storage")]
-pub use bwr_storage as storage;
+pub use storage;
+#[cfg(feature = "thread")]
+pub use thread;
+#[cfg(feature = "tick")]
+pub use tick;
+#[cfg(feature = "ui")]
+pub use ui;
 #[cfg(feature = "utils")]
-pub use bwr_utils as utils;
+pub use utils;
+#[cfg(feature = "wgpu")]
+pub use wgpu;
 #[cfg(feature = "worldgen")]
-pub use bwr_worldgen as worldgen;
+pub use worldgen;
 #[cfg(feature = "worldtick")]
-pub use bwr_worldtick as worldtick;
+pub use worldtick;

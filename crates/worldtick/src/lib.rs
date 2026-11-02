@@ -1,19 +1,5 @@
-use bwr_entity::Entity;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
-pub struct Tick(pub u64);
-
-pub trait Tickable {
-    fn tick(&mut self, tick: Tick);
-}
-
-pub trait TickScheduler {
-    fn current(&self) -> Tick;
-
-    fn schedule(&mut self, delay: u64, task: Box<dyn FnOnce(Tick) + Send>);
-
-    fn advance(&mut self) -> Tick;
-}
+use entity::Entity;
+pub use tick::{Tick, TickScheduler, Tickable};
 
 pub trait EntityTicker {
     fn tick_entities(&mut self, entities: &mut [Box<dyn Entity>], tick: Tick);

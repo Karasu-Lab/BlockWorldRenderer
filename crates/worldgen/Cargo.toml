@@ -1,11 +1,17 @@
 [package]
-name = "bwr-worldgen"
+name = "worldgen"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-block = { version = "0.1.0", path = "../block" }
-bwr-random = { version = "0.1.0", path = "../random" }
-bwr-registry = { version = "0.1.0", path = "../registry" }
-bwr-seed = { version = "0.1.0", path = "../seed" }
+block = { version = "0.1.0", path = "../block" }
+random = { version = "0.1.0", path = "../random" }
+registry = { version = "0.1.0", path = "../registry" }
+seed = { version = "0.1.0", path = "../seed" }
 thiserror = "2.0.21"
+pomme-singleplayer = { path = "../../third_party/Client/pomme-singleplayer", default-features = false, optional = true }
+
+[features]
+default = ["steel"]
+# SteelMC terrain generation (`SteelChunkGenerator`).
+steel = ["dep:pomme-singleplayer"]

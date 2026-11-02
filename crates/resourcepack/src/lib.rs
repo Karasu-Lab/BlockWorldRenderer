@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-pub use bwr_registry::ResourceKey;
-use bwr_serializer::{SerializerError, Value};
+pub use registry::ResourceKey;
+use serializer::{SerializerError, Value};
 use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
