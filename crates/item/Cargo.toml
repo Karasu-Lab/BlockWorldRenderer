@@ -1,0 +1,8 @@
+[package]
+name = "bwr-item"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bwr-datacomponent = { version = "0.1.0", path = "../datacomponent" }
+bwr-registry = { version = "0.1.0", path = "../registry" }

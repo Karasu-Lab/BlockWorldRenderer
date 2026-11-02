@@ -28,23 +28,58 @@
             inherit system;
             overlays = [ (import rust-overlay) ];
           };
-          rustToolchain = pkgs.rust-bin.stable.latest.default.override {
+          # Pinned to the nightly in third_party/Client/rust-toolchain.toml;
+          # bump it together with that file.
+          rustToolchain = pkgs.rust-bin.nightly."2026-08-21".default.override {
             extensions = [
               "rustfmt"
               "clippy"
+              "rust-analyzer"
+              "rust-src"
             ];
             targets = [ "wasm32-unknown-unknown" ];
           };
+          nativeLibs = pkgs.lib.optionals pkgs.stdenv.isLinux (
+            with pkgs;
+            [
+              vulkan-loader
+              wayland
+              libxkbcommon
+              libx11
+              libxcursor
+              libxi
+              libxrandr
+              libxcb
+              alsa-lib
+              udev
+              dbus
+              openssl
+            ]
+          );
         in
         {
-          default = pkgs.mkShell {
-            packages = [
-              rustToolchain
-              # Version must match the wasm-bindgen crate in Cargo.toml,
-              # which is pinned for this CLI.
-              pkgs.wasm-bindgen-cli_0_2_129
-            ];
-          };
+          default = pkgs.mkShell (
+            {
+              packages = [
+                rustToolchain
+                # Version must match the wasm-bindgen crate in Cargo.toml,
+                # which is pinned for this CLI.
+                pkgs.wasm-bindgen-cli_0_2_129
+                pkgs.just
+                pkgs.cargo-nextest
+                pkgs.pkg-config
+                pkgs.cmake
+                pkgs.ninja
+                pkgs.python3
+                pkgs.vulkan-headers
+              ]
+              ++ nativeLibs;
+            }
+            // pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
+              LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath nativeLibs;
+              RUSTFLAGS = "-L native=${pkgs.vulkan-loader}/lib";
+            }
+          );
         }
       );
     };

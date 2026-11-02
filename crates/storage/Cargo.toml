@@ -1,0 +1,9 @@
+[package]
+name = "bwr-storage"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bwr-registry = { version = "0.1.0", path = "../registry" }
+bwr-serializer = { version = "0.1.0", path = "../serializer" }
+thiserror = "2.0.21"

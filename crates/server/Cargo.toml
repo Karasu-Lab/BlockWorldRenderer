@@ -1,0 +1,13 @@
+[package]
+name = "bwr-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bwr-entity = { version = "0.1.0", path = "../entity" }
+bwr-network = { version = "0.1.0", path = "../network" }
+bwr-registry = { version = "0.1.0", path = "../registry" }
+bwr-storage = { version = "0.1.0", path = "../storage" }
+bwr-worldgen = { version = "0.1.0", path = "../worldgen" }
+bwr-worldtick = { version = "0.1.0", path = "../worldtick" }
+thiserror = "2.0.21"
