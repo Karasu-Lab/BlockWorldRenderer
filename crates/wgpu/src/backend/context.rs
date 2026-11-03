@@ -8,11 +8,8 @@ use super::resource::{Texture, TextureEntry, TextureHandle, lock};
 use super::{CommandEncoder, ContextError, Device, Error, RenderPassDesc, Shared};
 use crate::rhi::{self, Acquired, Extent, IndirectDrawFeatures, Presented};
 
-/// The frames the CPU records ahead of the GPU: the length of the client's
-/// per-frame resource arrays.
 pub const MAX_FRAMES_IN_FLIGHT: usize = 3;
 
-/// Swapchain image slots; frames take them in turn.
 const IMAGE_SLOTS: usize = MAX_FRAMES_IN_FLIGHT;
 
 pub struct Context {
@@ -21,20 +18,15 @@ pub struct Context {
     pub adapter: wgpu::Adapter,
     surface: Option<Arc<wgpu::Surface<'static>>>,
 
-    /// wgpu has no present wait; kept for the client's frame pacing.
     pub present_wait: bool,
     pub indirect_draw: IndirectDrawFeatures,
 
     pub gpu_name: String,
     pub api_version: String,
 
-    /// The size the window last said its surface has, for
-    /// [`Swapchain::surface_resized`].
     surface_extent: Mutex<(u32, u32)>,
 }
 
-/// Requests an adapter, compatible with `surface` if there is one, and the
-/// device and queue on it.
 async fn open_device(
     instance: &wgpu::Instance,
     surface: Option<&wgpu::Surface<'static>>,
@@ -50,14 +42,7 @@ async fn open_device(
         .await
         .map_err(|error| ContextError::NoSuitableGpu(error.to_string()))?;
 
-    // The chunk pass indexes each section's meta by `firstInstance`.
-    let required = wgpu::Features::INDIRECT_FIRST_INSTANCE;
-    if !adapter.features().contains(required) {
-        return Err(ContextError::NoSuitableGpu(
-            "the adapter has no indirect-first-instance".into(),
-        ));
-    }
-    let features = required | (adapter.features() & optional_features());
+    let features = adapter.features() & optional_features();
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("pomme"),
@@ -103,31 +88,63 @@ async fn open_device(
 }
 
 impl Device {
-    /// A device with no surface, for offscreen work.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn headless() -> Result<Self, ContextError> {
         pollster::block_on(Self::headless_async(true))
     }
 
-    /// [`Self::headless`] where `immediates: false` keeps the device from
-    /// using wgpu immediate data, so push constants go through the uniform
-    /// ring as they do in browsers that lack it.
     pub async fn headless_async(immediates: bool) -> Result<Self, ContextError> {
-        let instance = Context::instance();
+        let instance = Context::instance().await;
         let (_, shared) = open_device(&instance, None, immediates).await?;
         Ok(Device::new(shared))
     }
 
-    /// A headless device that emulates push constants with uniforms.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn headless_emulated_push() -> Result<Self, ContextError> {
         pollster::block_on(Self::headless_async(false))
     }
 }
 
-/// The device features the backend asks for when the adapter has them.
+#[cfg(target_arch = "wasm32")]
+pub async fn browser_supported() -> bool {
+    browser_has_webgpu_adapter().await || browser_has_webgl2()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn browser_has_webgl2() -> bool {
+    use wasm_bindgen::JsCast;
+
+    web_sys::window()
+        .and_then(|window| window.document())
+        .and_then(|document| document.create_element("canvas").ok())
+        .and_then(|canvas| canvas.dyn_into::<web_sys::HtmlCanvasElement>().ok())
+        .and_then(|canvas| canvas.get_context("webgl2").ok().flatten())
+        .is_some()
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn browser_has_webgpu_adapter() -> bool {
+    use js_sys::{Function, Promise, Reflect};
+    use wasm_bindgen::JsCast;
+    use wasm_bindgen_futures::JsFuture;
+
+    let adapter = async {
+        let navigator = Reflect::get(&js_sys::global(), &"navigator".into()).ok()?;
+        let gpu = Reflect::get(&navigator, &"gpu".into()).ok()?;
+        let request: Function = Reflect::get(&gpu, &"requestAdapter".into())
+            .ok()?
+            .dyn_into()
+            .ok()?;
+        let promise: Promise = request.call0(&gpu).ok()?.dyn_into().ok()?;
+        JsFuture::from(promise).await.ok()
+    }
+    .await;
+    adapter.is_some_and(|adapter| !adapter.is_null() && !adapter.is_undefined())
+}
+
 fn optional_features() -> wgpu::Features {
-    wgpu::Features::IMMEDIATES
+    wgpu::Features::INDIRECT_FIRST_INSTANCE
+        | wgpu::Features::IMMEDIATES
         | wgpu::Features::DEPTH_CLIP_CONTROL
         | wgpu::Features::FLOAT32_BLENDABLE
         | wgpu::Features::FLOAT32_FILTERABLE
@@ -136,34 +153,36 @@ fn optional_features() -> wgpu::Features {
 }
 
 impl Context {
-    /// A context drawing into `window`, which must outlive it.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new<W: HasWindowHandle + HasDisplayHandle>(window: &W) -> Result<Self, ContextError> {
         pollster::block_on(Self::new_async(window))
     }
 
-    /// [`Self::new`], for platforms where the GPU can only be asked
-    /// asynchronously.
     pub async fn new_async<W: HasWindowHandle + HasDisplayHandle>(
         window: &W,
     ) -> Result<Self, ContextError> {
-        let instance = Self::instance();
+        let instance = Self::instance().await;
         let surface = Self::window_surface(&instance, window)?;
         Self::from_surface(instance, surface).await
     }
 
-    /// A context drawing into a canvas.
     #[cfg(target_arch = "wasm32")]
     pub async fn from_canvas(canvas: web_sys::HtmlCanvasElement) -> Result<Self, ContextError> {
-        let instance = Self::instance();
+        let instance = Self::instance().await;
         let surface = instance
             .create_surface(wgpu::SurfaceTarget::Canvas(canvas))
             .map_err(|error| ContextError::Surface(error.to_string()))?;
         Self::from_surface(instance, surface).await
     }
 
-    fn instance() -> wgpu::Instance {
-        wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle())
+    async fn instance() -> wgpu::Instance {
+        #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
+        let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
+        #[cfg(target_arch = "wasm32")]
+        if !browser_has_webgpu_adapter().await {
+            descriptor.backends = wgpu::Backends::GL;
+        }
+        wgpu::Instance::new(descriptor)
     }
 
     fn window_surface<W: HasWindowHandle + HasDisplayHandle>(
@@ -174,8 +193,6 @@ impl Context {
             raw_display_handle: Some(window.display_handle()?.as_raw()),
             raw_window_handle: window.window_handle()?.as_raw(),
         };
-        // SAFETY: the caller keeps the window alive for as long as the
-        // context, as a Vulkan surface requires.
         unsafe { instance.create_surface_unsafe(target) }
             .map_err(|error| ContextError::Surface(error.to_string()))
     }
@@ -193,6 +210,14 @@ impl Context {
                 .features
                 .contains(wgpu::Features::MULTI_DRAW_INDIRECT_COUNT),
             multi_draw: cfg!(not(target_arch = "wasm32")),
+            gpu_cull: shared
+                .features
+                .contains(wgpu::Features::INDIRECT_FIRST_INSTANCE)
+                && shared
+                    .adapter
+                    .get_downlevel_capabilities()
+                    .flags
+                    .contains(wgpu::DownlevelFlags::COMPUTE_SHADERS),
         };
         Ok(Self {
             device: Device::new(shared),
@@ -207,17 +232,14 @@ impl Context {
         })
     }
 
-    /// Tells the context what size the window's surface has now.
     pub fn set_surface_extent(&self, width: u32, height: u32) {
         *lock(&self.surface_extent) = (width, height);
     }
 
-    /// Drops the surface while the platform has taken the native window away.
     pub fn destroy_surface(&mut self) {
         self.surface = None;
     }
 
-    /// A surface for the native window the platform hands back on resume.
     pub fn recreate_surface<W: HasWindowHandle + HasDisplayHandle>(
         &mut self,
         window: &W,
@@ -235,14 +257,10 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        // SAFETY: the context owns the device, and its resources go with it.
         unsafe { self.device.destroy() };
     }
 }
 
-/// An 8-bit UNORM format, BGRA (desktop drivers) or RGBA, so the display gets
-/// the gamma-space bytes as vanilla's present blit does; else the first one
-/// offered.
 fn choose_format(formats: &[wgpu::TextureFormat]) -> wgpu::TextureFormat {
     [
         wgpu::TextureFormat::Bgra8Unorm,
@@ -260,7 +278,6 @@ pub struct Swapchain {
     pub present_mode: wgpu::PresentMode,
     pub depth: Texture,
     images: Vec<Key>,
-    /// The drawable the frame being recorded presents.
     current: Mutex<Option<wgpu::SurfaceTexture>>,
     next: AtomicUsize,
     suboptimal: Mutex<bool>,
@@ -348,7 +365,6 @@ impl Swapchain {
         Ok((format, present_mode, extent))
     }
 
-    /// Reconfigures the surface at the new size and resizes `frames` to match.
     pub fn rebuild(
         &mut self,
         ctx: &Context,
@@ -375,12 +391,10 @@ impl Swapchain {
         self.images.len()
     }
 
-    /// The targets of pipelines that draw into the swapchain.
     pub fn targets(&self) -> super::PipelineTargets {
         super::PipelineTargets::new(self.format, true)
     }
 
-    /// Image `index`, as the RHI takes it.
     pub fn image(&self, index: u32) -> TextureHandle {
         TextureHandle(self.images[index as usize])
     }
@@ -399,15 +413,11 @@ impl Swapchain {
         self.present_mode == wgpu::PresentMode::Fifo
     }
 
-    /// Whether a suboptimal swapchain needs rebuilding: only once the surface's
-    /// size changed since it was configured.
     pub fn surface_resized(&self, ctx: &Context) -> bool {
         let (width, height) = *lock(&ctx.surface_extent);
         width > 0 && (width, height) != (self.extent.width, self.extent.height)
     }
 
-    /// Whether texels come out in BGRA order, as most desktop surfaces have
-    /// them.
     pub fn is_bgra(&self) -> bool {
         matches!(
             self.format,
@@ -415,11 +425,8 @@ impl Swapchain {
         )
     }
 
-    /// Hands image `index` from its last pass over to presenting; wgpu does
-    /// that by itself.
     pub fn ready_to_present(&self, _encoder: &CommandEncoder, _index: u32) {}
 
-    /// Drops what depends on the surface: the drawable.
     pub fn release_surface(&mut self, _ctx: &Context) {
         lock(&self.current).take();
         self.surface = None;
@@ -435,8 +442,6 @@ impl Swapchain {
     }
 }
 
-/// The frames in flight. wgpu orders frames against the surface itself; this
-/// counts them so the CPU doesn't run ahead of the GPU.
 pub struct Frames {
     index: usize,
 }
@@ -446,12 +451,10 @@ impl Frames {
         Ok(Self { index: 0 })
     }
 
-    /// The frame being recorded; per-frame resources are indexed by it.
     pub fn index(&self) -> usize {
         self.index
     }
 
-    /// Waits until the GPU has finished this frame's last use.
     pub fn wait(&self, device: &Device) -> Result<(), Error> {
         device
             .shared
@@ -497,14 +500,11 @@ impl Frames {
         })
     }
 
-    /// Starts recording the frame, once its image is acquired.
     pub fn begin(&self, device: &Device) -> Result<CommandEncoder, Error> {
         device.shared.push.reset();
         Ok(CommandEncoder::new(&device.shared))
     }
 
-    /// Submits the frame and presents `image` once it's drawn, then moves on
-    /// to the next frame.
     pub fn submit_and_present(
         &mut self,
         encoder: CommandEncoder,
@@ -528,8 +528,6 @@ impl Frames {
         })
     }
 
-    /// Blocks, for at most `timeout_ns`, until at most one frame is queued.
-    /// Always true: wgpu reports an out-of-date surface at acquire.
     pub fn pace(&self, ctx: &Context, _swapchain: &Swapchain, timeout_ns: u64) -> bool {
         ctx.device
             .shared
@@ -537,7 +535,6 @@ impl Frames {
         true
     }
 
-    /// Frames have no per-image state in wgpu.
     pub fn resize(&mut self, _device: &Device, _image_count: usize) -> Result<(), Error> {
         Ok(())
     }

@@ -1,12 +1,5 @@
-//! Pomme's render hardware interface: backend-neutral descriptions of GPU
-//! state, which the backend translates into its own objects. The shapes follow
-//! WebGPU's (bind groups, vertex buffer layouts), apart from push constants.
-//! Both the Vulkan and the wgpu backends take these descriptions.
-
-/// A shader as the client's `include_shader` gives it to the backend.
 pub type Shader<'a> = &'a [u8];
 
-/// A set of flags with `contains` and `|`, like WebGPU's flag types.
 macro_rules! flags {
     ($(#[$doc:meta])* $name:ident { $($flag:ident = $bit:literal),* $(,)? }) => {
         $(#[$doc])*
@@ -32,7 +25,6 @@ macro_rules! flags {
 }
 
 flags! {
-    /// Shader stages a binding or push constant is visible to.
     ShaderStages { VERTEX = 0, FRAGMENT = 1, COMPUTE = 2 }
 }
 
@@ -41,7 +33,6 @@ impl ShaderStages {
 }
 
 flags! {
-    /// What a buffer can be used for.
     BufferUsages {
         VERTEX = 0,
         INDEX = 1,
@@ -65,8 +56,6 @@ impl Extent {
     }
 }
 
-/// A rectangle in texels from the top-left: what scissors, viewports and
-/// mid-pass clears cover.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Rect {
     pub x: u32,
@@ -86,8 +75,6 @@ impl Rect {
     }
 }
 
-/// Mip levels and array layers of a color texture, as WebGPU's texture views
-/// select them.
 #[derive(Clone, Copy)]
 pub struct TextureRange {
     pub first_mip: u32,
@@ -105,7 +92,6 @@ impl TextureRange {
     };
 }
 
-/// A span copied between buffers, as WebGPU's `copyBufferToBuffer` takes it.
 #[derive(Clone, Copy)]
 pub struct BufferCopy {
     pub src_offset: u64,
@@ -113,21 +99,16 @@ pub struct BufferCopy {
     pub size: u64,
 }
 
-/// One layer of one mip level of a texture, whole, and where its texels sit
-/// tightly packed in a buffer: the buffer-texture copies Pomme makes.
 #[derive(Clone, Copy)]
 pub struct TexelCopy {
     pub buffer_offset: u64,
     pub mip_level: u32,
     pub layer: u32,
-    /// The top-left texel written in the level.
     pub origin: [u32; 2],
     pub width: u32,
     pub height: u32,
 }
 
-/// A filtered, scaling copy of a mip level of the first `layers` layers into
-/// another level, each whole.
 #[derive(Clone, Copy)]
 pub struct Blit {
     pub src_level: u32,
@@ -137,28 +118,20 @@ pub struct Blit {
     pub layers: u32,
 }
 
-/// How a texture is used between commands. Vulkan moves between uses with
-/// barriers; WebGPU tracks them itself and ignores transitions.
 #[derive(Clone, Copy)]
 pub enum TextureUse {
-    /// Contents don't matter; only valid as the use being left.
     Undefined,
     CopySrc,
     CopyDst,
     ShaderRead,
     ColorAttachment,
     Present,
-    /// A depth texture as a pass's depth target.
     DepthAttachment,
-    /// A depth texture sampled by a shader.
     DepthRead,
-    /// A depth texture as a copy's source.
     DepthCopySrc,
-    /// A depth texture as a copy's destination, or being cleared.
     DepthCopyDst,
 }
 
-/// `range` of `texture` moving from one use to the next.
 #[derive(Clone, Copy)]
 pub struct TextureTransition<Texture> {
     pub texture: Texture,
@@ -168,7 +141,6 @@ pub struct TextureTransition<Texture> {
 }
 
 impl<Texture> TextureTransition<Texture> {
-    /// The single mip and layer of a color `texture`.
     pub fn color(texture: Texture, from: TextureUse, to: TextureUse) -> Self {
         Self {
             texture,
@@ -179,7 +151,6 @@ impl<Texture> TextureTransition<Texture> {
     }
 }
 
-/// How buffer memory is used between commands; see [`TextureUse`].
 #[derive(Clone, Copy)]
 pub enum BufferUse {
     CopySrc,
@@ -189,24 +160,15 @@ pub enum BufferUse {
     HostRead,
 }
 
-/// The optional features behind the chunk pass's indirect draws.
 #[derive(Clone, Copy, Debug)]
 pub struct IndirectDrawFeatures {
-    /// A draw count read from a buffer (`vkCmdDrawIndexedIndirectCount`,
-    /// core in Vulkan 1.2; WebGPU has none). Without it the whole draw list
-    /// is drawn, its unfilled slots zeroed into no-op draws.
     pub count: bool,
-    /// Several indirect draws per call (`multiDrawIndirect`). Without it each
-    /// draw-list slot is its own call.
     pub multi_draw: bool,
+    pub gpu_cull: bool,
 }
 
 pub enum Acquired {
-    Image {
-        index: u32,
-        suboptimal: bool,
-    },
-    /// The swapchain no longer matches its surface and needs rebuilding.
+    Image { index: u32, suboptimal: bool },
     OutOfDate,
 }
 
@@ -216,19 +178,14 @@ pub enum Presented {
     OutOfDate,
 }
 
-/// Where a buffer's memory lives.
 #[derive(Clone, Copy)]
 pub enum MemoryLocation {
-    /// Written by the CPU.
     Host,
-    /// GPU-only, filled by copies.
     Device,
-    /// A copy destination the CPU reads back, starting zeroed.
     Readback,
 }
 
 flags! {
-    /// What a texture can be used for.
     TextureUsages {
         COPY_SRC = 0,
         COPY_DST = 1,
@@ -255,7 +212,6 @@ pub enum TextureFormat {
 }
 
 impl TextureFormat {
-    /// Bytes per texel, as copies into the texture count them.
     pub fn texel_size(self) -> u32 {
         match self {
             Self::R8Unorm => 1,
@@ -272,12 +228,10 @@ impl TextureFormat {
     }
 }
 
-/// How a texture's view sees its layers.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TextureViewDimension {
     D2,
     D2Array,
-    /// Six layers, one per face.
     Cube,
 }
 
@@ -293,7 +247,6 @@ pub struct TextureDesc<'a> {
 }
 
 impl TextureDesc<'static> {
-    /// A swapchain's depth buffer.
     pub fn swapchain_depth(extent: Extent) -> Self {
         Self::new(
             "depth_image",
@@ -306,7 +259,6 @@ impl TextureDesc<'static> {
 }
 
 impl<'a> TextureDesc<'a> {
-    /// One 2D layer, without mips.
     pub fn new(
         label: &'a str,
         width: u32,
@@ -339,8 +291,6 @@ pub enum StoreOp {
     Discard,
 }
 
-/// A pass's color target, in the shape of WebGPU's
-/// `GPURenderPassColorAttachment`.
 #[derive(Clone, Copy)]
 pub struct ColorAttachment<Texture, Format> {
     pub texture: Texture,
@@ -349,7 +299,6 @@ pub struct ColorAttachment<Texture, Format> {
     pub store: StoreOp,
 }
 
-/// A pass's `Depth32Float` target.
 #[derive(Clone, Copy)]
 pub struct DepthAttachment<Texture> {
     pub texture: Texture,
@@ -358,7 +307,6 @@ pub struct DepthAttachment<Texture> {
 }
 
 impl<Texture> DepthAttachment<Texture> {
-    /// Cleared to the far plane, and dropped after the pass.
     pub fn cleared(texture: Texture) -> Self {
         Self {
             texture,
@@ -368,23 +316,16 @@ impl<Texture> DepthAttachment<Texture> {
     }
 }
 
-/// The most color targets a pass or pipeline can have.
 pub const MAX_COLOR_TARGETS: usize = 8;
 
-/// The formats a pipeline draws into, as WebGPU pipelines name their targets'
-/// formats rather than a pass.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PipelineTargets<Format> {
-    /// The color target at location 0; `None` draws depth alone.
     pub color: Option<Format>,
-    /// Further color targets, at locations 1, 2, ...
     pub extra_colors: [Option<Format>; MAX_COLOR_TARGETS - 1],
-    /// Whether there's a `Depth32Float` target.
     pub depth: bool,
 }
 
 impl<Format: Copy> PipelineTargets<Format> {
-    /// One color target, and a depth target if `depth`.
     pub const fn new(color: Format, depth: bool) -> Self {
         Self {
             color: Some(color),
@@ -393,7 +334,6 @@ impl<Format: Copy> PipelineTargets<Format> {
         }
     }
 
-    /// A depth target alone.
     pub const fn depth_only() -> Self {
         Self {
             color: None,
@@ -404,17 +344,13 @@ impl<Format: Copy> PipelineTargets<Format> {
 }
 
 pub struct RenderPassDesc<Texture, Format> {
-    /// The color target at location 0; `None` draws depth alone.
     pub color: Option<ColorAttachment<Texture, Format>>,
-    /// Further color targets, matching the pipelines' `extra_colors`.
     pub extra_colors: Vec<ColorAttachment<Texture, Format>>,
     pub depth: Option<DepthAttachment<Texture>>,
     pub extent: Extent,
 }
 
 impl<Texture, Format> RenderPassDesc<Texture, Format> {
-    /// Drawing into a swapchain `image` over its `depth` buffer, which starts
-    /// cleared; `load` clears the image or keeps what an earlier pass drew.
     pub fn swapchain(
         image: Texture,
         format: Format,
@@ -448,15 +384,12 @@ pub enum AddressMode {
     Repeat,
 }
 
-/// One filter for magnifying and minifying, and one address mode on every
-/// axis.
 #[derive(Clone, Copy)]
 pub struct SamplerDesc {
     pub filter: FilterMode,
     pub address_mode: AddressMode,
     pub mipmap_filter: FilterMode,
     pub lod_max_clamp: f32,
-    /// A comparison sampler for depth textures (GLSL's `sampler2DShadow`).
     pub compare: Option<CompareFunction>,
 }
 
@@ -466,7 +399,6 @@ impl SamplerDesc {
     pub const LINEAR: Self = Self::new(FilterMode::Linear, AddressMode::ClampToEdge);
     pub const LINEAR_REPEAT: Self = Self::new(FilterMode::Linear, AddressMode::Repeat);
 
-    /// Samples the base level only.
     pub const fn new(filter: FilterMode, address_mode: AddressMode) -> Self {
         Self {
             filter,
@@ -477,7 +409,6 @@ impl SamplerDesc {
         }
     }
 
-    /// Blends between the levels of a texture with `mip_levels` of them.
     pub fn with_mips(self, mip_levels: u32) -> Self {
         Self {
             mipmap_filter: if mip_levels > 1 {
@@ -495,12 +426,10 @@ impl SamplerDesc {
 pub enum BindingType {
     UniformBuffer,
     StorageBuffer,
-    /// A sampled texture; its sampler is a separate [`BindingType::Sampler`].
     Texture,
     Sampler,
 }
 
-/// One binding of a bind group, numbered by its index in the layout.
 #[derive(Clone, Copy)]
 pub struct BindGroupLayoutEntry {
     pub ty: BindingType,
@@ -537,7 +466,6 @@ impl BindGroupLayoutEntry {
     }
 }
 
-/// Push constants, from offset 0.
 #[derive(Clone, Copy)]
 pub struct PushConstants {
     pub visibility: ShaderStages,
@@ -585,8 +513,6 @@ pub struct VertexAttribute {
     pub offset: u32,
 }
 
-/// Attributes laid out back to back from offset 0, at consecutive locations
-/// from `first_location`.
 pub const fn packed_attributes<const N: usize>(
     first_location: u32,
     formats: [VertexFormat; N],
@@ -667,7 +593,6 @@ impl DepthState {
         compare: CompareFunction::LessEqual,
         bias: None,
     };
-    /// Tested but not written, so the geometry never hides what's behind it.
     pub const READ_ONLY: Self = Self {
         write: false,
         ..Self::WRITE
@@ -686,7 +611,6 @@ pub enum BlendFactor {
     OneMinusSrcAlpha,
 }
 
-/// `src * src_factor + dst * dst_factor`.
 #[derive(Clone, Copy)]
 pub struct BlendComponent {
     pub src: BlendFactor,
@@ -708,7 +632,6 @@ impl BlendComponent {
     };
 }
 
-/// The named states match vanilla's `BlendFunction` constants.
 #[derive(Clone, Copy)]
 pub struct BlendState {
     pub color: BlendComponent,
@@ -738,16 +661,12 @@ impl BlendState {
         },
         alpha: BlendComponent::REPLACE,
     };
-    /// Not one of vanilla's: the color blends over, the source alpha is
-    /// written as is.
     pub const OVER_REPLACE_ALPHA: Self = Self {
         color: BlendComponent::OVER,
         alpha: BlendComponent::REPLACE,
     };
 }
 
-/// A graphics pipeline drawing to one color target, with the viewport and
-/// scissor set per pass. Shaders are SPIR-V with a `main` entry point.
 #[derive(Clone, Copy)]
 pub struct RenderPipelineDesc<'a> {
     pub label: &'a str,
@@ -757,18 +676,12 @@ pub struct RenderPipelineDesc<'a> {
     pub topology: Topology,
     pub cull_mode: CullMode,
     pub front_face: FrontFace,
-    /// `None` disables the depth test.
     pub depth: Option<DepthState>,
-    /// `None` writes the color unblended.
     pub blend: Option<BlendState>,
-    /// Clamps depth instead of clipping at the near and far planes, where the
-    /// device can.
     pub depth_clamp: bool,
 }
 
 impl<'a> RenderPipelineDesc<'a> {
-    /// Unculled triangles with no depth test or blending; callers override
-    /// the rest.
     pub const fn new(
         label: &'a str,
         vertex_shader: Shader<'a>,

@@ -16,4 +16,4 @@ pub use size::CanvasSize;
 #[cfg(target_arch = "wasm32")]
 pub use runtime::{Canvas, CanvasOptions, CanvasRenderer, RendererFactory};
 #[cfg(target_arch = "wasm32")]
-pub use webgpu::webgpu_available;
+pub use webgpu::{webgl2_available, webgpu_available};

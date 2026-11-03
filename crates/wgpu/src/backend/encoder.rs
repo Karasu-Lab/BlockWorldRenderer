@@ -27,9 +27,6 @@ fn store_op(store: StoreOp) -> wgpu::StoreOp {
     }
 }
 
-/// Records transfers and passes into a command buffer, in the shape of
-/// WebGPU's `GPUCommandEncoder`. Layout transitions need no recording: wgpu
-/// tracks how textures are used itself.
 #[derive(Clone)]
 pub struct CommandEncoder {
     inner: Arc<EncoderInner>,
@@ -87,13 +84,21 @@ impl CommandEncoder {
             .clone()
     }
 
-    /// Texture states are tracked by wgpu.
     pub fn transition_textures(&self, _transitions: &[TextureTransition]) {}
 
-    /// Buffer states are tracked by wgpu.
     pub fn transition_buffers(&self, _from: BufferUse, _to: BufferUse) {}
 
     pub fn copy_buffer(&self, src: BufferHandle, dst: BufferHandle, copies: &[BufferCopy]) {
+        let mapping = self
+            .inner
+            .shared
+            .buffers
+            .get(dst.0)
+            .and_then(|entry| entry.readback.clone())
+            .is_some_and(|readback| readback.is_mapping());
+        if mapping {
+            return;
+        }
         let (src, dst) = (self.buffer(src), self.buffer(dst));
         self.with(|encoder, _| {
             for copy in copies {
@@ -108,7 +113,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Copies into `image`.
     pub fn copy_buffer_to_texture(
         &self,
         buffer: BufferHandle,
@@ -144,7 +148,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Copies out of `image`.
     pub fn copy_texture_to_buffer(
         &self,
         image: TextureHandle,
@@ -180,8 +183,6 @@ impl CommandEncoder {
         });
     }
 
-    /// A filtered, scaling copy of `blit.layers` layers, drawn as a
-    /// fullscreen triangle sampling the source level.
     pub fn blit(&self, src: TextureHandle, dst: TextureHandle, blit: &Blit) {
         let (src, dst) = (self.texture(src), self.texture(dst));
         self.with(|encoder, shared| {
@@ -236,7 +237,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Clears `range` of `image` to `color`.
     pub fn clear_texture(&self, image: TextureHandle, range: TextureRange, rgba: [f32; 4]) {
         let image = self.texture(image);
         self.with(|encoder, _| {
@@ -264,7 +264,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Clears a depth `image` to `depth`.
     pub fn clear_depth(&self, image: TextureHandle, depth: f32) {
         let image = self.texture(image);
         let view = image.attachment_view();
@@ -287,7 +286,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Copies `extent` of a depth texture `src` into `dst`.
     pub fn copy_depth(&self, src: TextureHandle, dst: TextureHandle, extent: Extent) {
         let (src, dst) = (self.texture(src), self.texture(dst));
         self.with(|encoder, _| {
@@ -313,8 +311,6 @@ impl CommandEncoder {
         });
     }
 
-    /// Uploads `copies` of `staging` into a fresh `image`, leaving it ready to
-    /// sample.
     pub fn upload_texture(
         &self,
         staging: BufferHandle,
@@ -325,8 +321,6 @@ impl CommandEncoder {
         self.copy_buffer_to_texture(staging, image, copies);
     }
 
-    /// Begins the pass `desc` describes, with the viewport and scissor
-    /// covering its extent.
     pub fn begin_render_pass(&self, _device: &Device, desc: &RenderPassDesc) -> RenderPassEncoder {
         let shared = self.inner.shared.clone();
         let colors: Vec<Option<&ColorAttachment>> = std::iter::once(desc.color.as_ref())
@@ -421,7 +415,6 @@ impl CommandEncoder {
         }
     }
 
-    /// Dispatches `groups` workgroups of `pipeline` with `group` bound at 0.
     pub fn dispatch(&self, pipeline: &ComputePipeline, group: BindGroup, groups: [u32; 3]) {
         let shared = &self.inner.shared;
         let pipeline = shared
@@ -453,8 +446,6 @@ impl CommandEncoder {
     }
 }
 
-/// Splits `copies` into the pieces wgpu can do: whole copies where rows are
-/// 256-byte aligned or there is one row, else one copy per row.
 fn for_each_row_block(
     image: &TextureEntry,
     copies: &[TexelCopy],
@@ -504,14 +495,11 @@ fn for_each_row_block(
 
 struct PassState {
     pipeline: Option<Arc<RenderPipelineEntry>>,
-    /// The bind group set at each index, and the id of the layout it was set
-    /// against.
     groups: Vec<Option<(BindGroup, Option<u64>)>>,
-    vertex: Vec<Option<BufferHandle>>,
+    vertex: Vec<Option<(BufferHandle, u64)>>,
     index: Option<BufferHandle>,
     viewport: Rect,
     scissor: Rect,
-    /// The push constants as the shader last saw them.
     push: Vec<u8>,
     push_dirty: bool,
 }
@@ -524,8 +512,6 @@ struct PassInner {
     full: Rect,
 }
 
-/// Records one render pass, in the shape of WebGPU's `GPURenderPassEncoder`:
-/// bind groups and push constants go to the layout of the last pipeline set.
 pub struct RenderPassEncoder {
     shared: Arc<Shared>,
     inner: Mutex<PassInner>,
@@ -536,7 +522,6 @@ impl PassInner {
         self.pass.as_mut().expect("the pass has ended")
     }
 
-    /// Sets the wgpu group for the RHI group at `index`.
     fn apply_group(&mut self, shared: &Shared, index: usize) {
         let Some(pipeline) = self.state.pipeline.clone() else {
             return;
@@ -579,7 +564,6 @@ impl PassInner {
         }
     }
 
-    /// Writes the push constants a draw needs, if they changed.
     fn flush_push(&mut self, shared: &Shared) {
         if !self.state.push_dirty {
             return;
@@ -616,7 +600,6 @@ impl PassInner {
         pass.set_scissor_rect(scissor.x, scissor.y, scissor.width, scissor.height);
     }
 
-    /// Redraws nothing; rebinds what a helper draw replaced.
     fn restore(&mut self, shared: &Shared) {
         if let Some(pipeline) = self.state.pipeline.clone() {
             self.pass().set_pipeline(&pipeline.pipeline);
@@ -630,11 +613,11 @@ impl PassInner {
             }
         }
         for slot in 0..self.state.vertex.len() {
-            if let Some(buffer) = self.state.vertex[slot]
+            if let Some((buffer, offset)) = self.state.vertex[slot]
                 && let Some(entry) = shared.buffers.get(buffer.0)
             {
                 self.pass()
-                    .set_vertex_buffer(slot as u32, entry.buffer.slice(..));
+                    .set_vertex_buffer(slot as u32, entry.buffer.slice(offset..));
             }
         }
         if let Some(buffer) = self.state.index
@@ -666,7 +649,6 @@ impl RenderPassEncoder {
         self.with(|inner, shared| inner.apply_pipeline(shared, &entry));
     }
 
-    /// Binds `groups` at consecutive indices from `first`.
     pub fn set_bind_groups(&self, first: u32, groups: &[BindGroup]) {
         self.with(|inner, shared| {
             let end = first as usize + groups.len();
@@ -710,6 +692,10 @@ impl RenderPassEncoder {
     }
 
     pub fn set_vertex_buffer(&self, slot: u32, buffer: BufferHandle) {
+        self.set_vertex_buffer_at(slot, buffer, 0);
+    }
+
+    pub fn set_vertex_buffer_at(&self, slot: u32, buffer: BufferHandle, offset: u64) {
         let Some(entry) = self.shared.buffers.get(buffer.0) else {
             self.shared
                 .log_error("a vertex buffer was destroyed while bound");
@@ -719,12 +705,13 @@ impl RenderPassEncoder {
             if inner.state.vertex.len() <= slot as usize {
                 inner.state.vertex.resize(slot as usize + 1, None);
             }
-            inner.state.vertex[slot as usize] = Some(buffer);
-            inner.pass().set_vertex_buffer(slot, entry.buffer.slice(..));
+            inner.state.vertex[slot as usize] = Some((buffer, offset));
+            inner
+                .pass()
+                .set_vertex_buffer(slot, entry.buffer.slice(offset..));
         });
     }
 
-    /// Binds `buffer` as `u32` indices.
     pub fn set_index_buffer(&self, buffer: BufferHandle) {
         let Some(entry) = self.shared.buffers.get(buffer.0) else {
             self.shared
@@ -739,7 +726,6 @@ impl RenderPassEncoder {
         });
     }
 
-    /// A viewport over `rect` with the full 0..1 depth range.
     pub fn set_viewport(&self, rect: Rect) {
         self.with(|inner, _| {
             inner.state.viewport = rect;
@@ -788,7 +774,6 @@ impl RenderPassEncoder {
         });
     }
 
-    /// `draw_count` indexed draws read from `buffer`, `stride` bytes apart.
     pub fn draw_indexed_indirect(
         &self,
         buffer: BufferHandle,
@@ -819,8 +804,6 @@ impl RenderPassEncoder {
         });
     }
 
-    /// Like [`Self::draw_indexed_indirect`], with the draw count read from
-    /// `count_buffer` and capped at `max_draws`.
     pub fn draw_indexed_indirect_count(
         &self,
         buffer: BufferHandle,
@@ -852,18 +835,14 @@ impl RenderPassEncoder {
         });
     }
 
-    /// Clears depth to 1.0 inside `rect` mid-pass.
     pub fn clear_depth(&self, rect: Rect) {
         self.clear(ClearKind::Depth, rect, None);
     }
 
-    /// Clears the color target to `color` inside `rect` mid-pass.
     pub fn clear_color(&self, rect: Rect, rgba: [f32; 4]) {
         self.clear(ClearKind::Color, rect, Some(rgba));
     }
 
-    /// wgpu has no clear inside a pass: this draws over `rect` instead, then
-    /// puts back what the pass had bound.
     fn clear(&self, kind: ClearKind, rect: Rect, rgba: Option<[f32; 4]>) {
         self.with(|inner, shared| {
             if matches!(kind, ClearKind::Depth) && !inner.depth {
@@ -905,5 +884,4 @@ impl RenderPassEncoder {
     }
 }
 
-/// Bytes of one indexed indirect draw's arguments.
 const INDIRECT_ARGS_SIZE: u32 = 20;
