@@ -19,17 +19,21 @@ interface RendererModule {
   load_progress(): number;
   /** What the download is doing. */
   load_status(): string;
+  /** Whether the renderer has confirmed a GPU it can draw with. */
+  renderer_available(): boolean;
 }
 
-/** How far the assets' download has got. */
+/** How far loading has got; the download counts only once `available`. */
 export interface LoadProgress {
+  /** The renderer has confirmed a GPU before the download began. */
+  available: boolean;
   fraction: number;
   status: string;
 }
 
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
-const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer_bg.wasm`;
+const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer.wasm`;
 
 export function hasWebGpu(): boolean {
   return typeof navigator !== "undefined" && "gpu" in navigator;
@@ -51,7 +55,12 @@ export async function startWorld(
   // The asset servers do not answer other origins, so a deployment points
   // these at a mirror; unset, the game's own servers are used.
   const poll = setInterval(
-    () => onProgress({ fraction: renderer.load_progress(), status: renderer.load_status() }),
+    () =>
+      onProgress({
+        available: renderer.renderer_available(),
+        fraction: renderer.load_progress(),
+        status: renderer.load_status(),
+      }),
     200,
   );
   try {
