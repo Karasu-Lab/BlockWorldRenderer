@@ -70,7 +70,13 @@ Generate the JavaScript bindings with wasm-bindgen:
 
 ```sh
 wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
+mv pkg/block_world_renderer_bg.wasm pkg/block_world_renderer.wasm
+mv pkg/block_world_renderer_bg.wasm.d.ts pkg/block_world_renderer.wasm.d.ts
+sed -i 's/block_world_renderer_bg\.wasm/block_world_renderer.wasm/g' pkg/block_world_renderer.js
 ```
+
+`just web-wasm` runs the whole sequence and places the package in
+`apps/web/public/wasm`.
 
 ## Test
 
