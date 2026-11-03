@@ -24,7 +24,11 @@ export interface ReplayControls {
    * nothing is loaded and the generated world stays on screen.
    */
   load: () => Promise<void>;
-  /** Moves the playhead; backward seeks replay from the start. */
+  /**
+   * Moves the playhead; backward seeks replay from the start. The
+   * viewer restarts on the new position, so the columns on screen
+   * are the ones the recording had sent by then.
+   */
   seek: (timeMs: number) => void;
   /** The current playhead position, in milliseconds. */
   time: number;
@@ -75,20 +79,7 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
     if (handle) world.publishEntities(parseEntities(handle.entities_json()));
   }, [world]);
 
-  const applyTo = useCallback(
-    (targetMs: number) => {
-      const session = sessionRef.current;
-      if (!session?.handle) return;
-      const clamped = Math.min(
-        Math.max(0, Math.round(targetMs)),
-        session.handle.duration_ms(),
-      );
-      session.handle.apply_until(clamped);
-      setTime(clamped);
-      syncEntities();
-    },
-    [syncEntities],
-  );
+  const restartChainRef = useRef<Promise<void>>(Promise.resolve());
 
   const attach = useCallback(
     (path: string) => {
@@ -123,11 +114,6 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
     syncEntities();
   }, [cancelLoop, syncEntities, world]);
 
-  const seek = useCallback(
-    (timeMs: number) => applyTo(timeMs),
-    [applyTo],
-  );
-
   const startPlayback = useCallback(() => {
     if (rafRef.current !== null) return;
     setIsPlaying(true);
@@ -152,6 +138,40 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
     rafRef.current = requestAnimationFrame(step);
   }, [cancelLoop, syncEntities]);
 
+  const seekTo = useCallback(
+    (targetMs: number, resume: boolean) => {
+      const session = sessionRef.current;
+      if (!session?.handle) return;
+      cancelLoop();
+      const handle = session.handle;
+      const clamped = Math.min(
+        Math.max(0, Math.round(targetMs)),
+        handle.duration_ms(),
+      );
+      handle.apply_until(clamped);
+      setTime(clamped);
+      syncEntities();
+      // The viewer keeps the columns it already loaded, so the
+      // viewer restarts on the moved playhead to show the state the
+      // recording had reached by then. Restarts are chained: rapid
+      // seeks queue up instead of racing, and the last one leaves
+      // the viewer on the final state.
+      restartChainRef.current = restartChainRef.current
+        .catch(() => {})
+        .then(() => world.showReplay(handle))
+        .then(() => {
+          if (resume) startPlayback();
+        })
+        .catch(() => {});
+    },
+    [cancelLoop, startPlayback, syncEntities, world],
+  );
+
+  const seek = useCallback(
+    (timeMs: number) => seekTo(timeMs, rafRef.current !== null),
+    [seekTo],
+  );
+
   const play = useCallback(() => {
     if (sessionRef.current?.handle) {
       startPlayback();
@@ -162,10 +182,7 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
 
   const pause = useCallback(() => cancelLoop(), [cancelLoop]);
 
-  const stop = useCallback(() => {
-    cancelLoop();
-    applyTo(0);
-  }, [applyTo, cancelLoop]);
+  const stop = useCallback(() => seekTo(0, false), [seekTo]);
 
   const close = useCallback(async () => {
     cancelLoop();
