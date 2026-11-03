@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-# rustdoc links this crate and the crates.io `wgpu` under the same name.
 doctest = false
 
 [dependencies]
@@ -18,19 +17,19 @@ bytemuck = { version = "1", optional = true }
 naga = { version = "30", optional = true, features = ["wgsl-in", "wgsl-out"] }
 raw-window-handle = { version = "0.6", optional = true }
 thiserror = "2.0.21"
-wgpu = { version = "30.0.1", optional = true }
+wgpu = { version = "30.0.1", optional = true, features = ["webgl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pollster = { version = "0.4", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.106"
+wasm-bindgen = "=0.2.129"
 wasm-bindgen-futures = { version = "0.4", optional = true }
-web-sys = { version = "0.3", optional = true, features = ["HtmlCanvasElement", "console"] }
+web-sys = { version = "0.3", optional = true, features = ["Document", "HtmlCanvasElement", "WebGl2RenderingContext", "Window", "console"] }
 
 [features]
 default = []
-# The wgpu device layer and `WgpuRenderer`. Without it only the dependency-free
-# `rhi` descriptor types are built, which the Vulkan backend shares.
 backend = [
     "dep:block",
     "dep:camera",

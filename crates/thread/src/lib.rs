@@ -31,7 +31,6 @@ pub trait WorkerPool {
     fn spawn(&self, task: Task) -> Result<(), ThreadError>;
 }
 
-/// How many workers can run at once.
 pub fn available_parallelism() -> usize {
     #[cfg(not(target_arch = "wasm32"))]
     return std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -39,23 +38,31 @@ pub fn available_parallelism() -> usize {
     rayon::current_num_threads().max(1)
 }
 
-/// The result of a task on a worker, waited for with [`JoinHandle::join`].
 pub struct JoinHandle<T> {
     result: Receiver<ThreadResult<T>>,
 }
 
 impl<T> JoinHandle<T> {
-    /// Blocks until the task is done. In the browser only a worker may block,
-    /// not the page's main thread.
     pub fn join(self) -> Result<T, ThreadError> {
-        match self.result.recv() {
+        #[cfg(target_arch = "wasm32")]
+        let received = loop {
+            match self.result.try_recv() {
+                Ok(outcome) => break Ok(outcome),
+                Err(std::sync::mpsc::TryRecvError::Empty) => std::hint::spin_loop(),
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    break Err(std::sync::mpsc::RecvError);
+                }
+            }
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        let received = self.result.recv();
+        match received {
             Ok(Ok(value)) => Ok(value),
             Ok(Err(_)) => Err(ThreadError::Panicked),
             Err(_) => Err(ThreadError::Closed),
         }
     }
 
-    /// The result if the task has finished.
     pub fn try_join(&self) -> Option<Result<T, ThreadError>> {
         match self.result.try_recv() {
             Ok(Ok(value)) => Some(Ok(value)),
@@ -66,8 +73,6 @@ impl<T> JoinHandle<T> {
     }
 }
 
-/// Runs `task` on a worker; long-running loops are fine, each takes a worker
-/// for as long as it runs.
 pub fn spawn<T: Send + 'static>(
     name: impl Into<String>,
     task: impl FnOnce() -> T + Send + 'static,
@@ -96,8 +101,6 @@ fn start(_name: String, run: Task) -> Result<(), ThreadError> {
     Ok(())
 }
 
-/// Starts the Web Workers of the pool, which tasks need before they run. Call
-/// it once from JavaScript's `initThreadPool` and await it.
 #[cfg(target_arch = "wasm32")]
 pub use wasm_bindgen_rayon::init_thread_pool;
 
@@ -171,7 +174,6 @@ mod native {
 #[cfg(not(target_arch = "wasm32"))]
 pub use native::NativePool;
 
-/// The browser's pool as a [`WorkerPool`].
 #[cfg(target_arch = "wasm32")]
 pub struct RayonPool;
 

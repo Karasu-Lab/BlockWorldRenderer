@@ -1,0 +1,8 @@
+{
+  "graphicsUnsupported": "This browser supports neither WebGPU nor WebGL2.",
+  "errors": {
+    "startFailed": "The world could not be started.",
+    "unexpected": "An unexpected error occurred.",
+    "copy": "Copy"
+  }
+}

@@ -1,4 +1,3 @@
-/** What `wasm-bindgen` exports for the renderer's `WorldHandle`. */
 export interface WorldHandle {
   stop(): void;
   set_ui_enabled(enabled: boolean): void;
@@ -8,24 +7,18 @@ export interface WorldHandle {
 
 interface RendererModule {
   default(input?: { module_or_path: string }): Promise<unknown>;
-  /** Starts the Web Workers that chunk generation runs on. */
   initThreadPool(threads: number): Promise<unknown>;
   start(
     canvas: HTMLCanvasElement,
     versionManifest?: string,
     resourcesBase?: string,
   ): Promise<WorldHandle>;
-  /** How far the assets' download has got, 0 to 1. */
   load_progress(): number;
-  /** What the download is doing. */
   load_status(): string;
-  /** Whether the renderer has confirmed a GPU it can draw with. */
   renderer_available(): boolean;
 }
 
-/** How far loading has got; the download counts only once `available`. */
 export interface LoadProgress {
-  /** The renderer has confirmed a GPU before the download began. */
   available: boolean;
   fraction: number;
   status: string;
@@ -35,25 +28,39 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
 const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer.wasm`;
 
-export function hasWebGpu(): boolean {
-  return typeof navigator !== "undefined" && "gpu" in navigator;
+export function hasGraphicsApi(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if ("gpu" in navigator) return true;
+  return document.createElement("canvas").getContext("webgl2") !== null;
 }
 
-/**
- * Loads the wasm package from `public/wasm`, where `just web-wasm` places
- * it, and starts the fixed world on `canvas`.
- */
+let loading: Promise<RendererModule> | undefined;
+
+function loadRenderer(): Promise<RendererModule> {
+  loading ??= (async () => {
+    const renderer: RendererModule = await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE_URL
+    );
+    await renderer.default({ module_or_path: WASM_URL });
+    await renderer.initThreadPool(
+      Math.max(2, navigator.hardwareConcurrency || 2),
+    );
+    return renderer;
+  })().catch((error: unknown) => {
+    loading = undefined;
+    throw error;
+  });
+  return loading;
+}
+
 export async function startWorld(
   canvas: HTMLCanvasElement,
   onProgress: (progress: LoadProgress) => void = () => {},
 ): Promise<WorldHandle> {
-  const renderer: RendererModule = await import(
-    /* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE_URL
-  );
-  await renderer.default({ module_or_path: WASM_URL });
-  await renderer.initThreadPool(Math.max(2, navigator.hardwareConcurrency || 2));
-  // The asset servers do not answer other origins, so a deployment points
-  // these at a mirror; unset, the game's own servers are used.
+  const renderer = await loadRenderer();
+  const resourcesBase =
+    process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
+    new URL(`${BASE_PATH}/resources`, location.origin).href;
   const poll = setInterval(
     () =>
       onProgress({
@@ -67,7 +74,7 @@ export async function startWorld(
     return await renderer.start(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
-      process.env.NEXT_PUBLIC_RESOURCES_BASE_URL,
+      resourcesBase,
     );
   } finally {
     clearInterval(poll);

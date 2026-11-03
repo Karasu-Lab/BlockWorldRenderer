@@ -13,22 +13,19 @@ pub(crate) fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// Rounds a size up to wgpu's copy alignment.
 pub(crate) fn align4(size: u64) -> u64 {
     size.div_ceil(wgpu::COPY_BUFFER_ALIGNMENT) * wgpu::COPY_BUFFER_ALIGNMENT
 }
 
 pub(crate) struct BufferEntry {
     pub buffer: wgpu::Buffer,
+    pub readback: Option<Arc<Readback>>,
 }
 
-/// What commands and bindings take a [`Buffer`] as: a small copy, valid until
-/// the buffer is destroyed.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct BufferHandle(pub(crate) Key);
 
-/// A CPU-readable mirror of a [`MemoryLocation::Readback`] buffer.
-struct Readback {
+pub(crate) struct Readback {
     #[cfg(not(target_arch = "wasm32"))]
     device: wgpu::Device,
     buffer: wgpu::Buffer,
@@ -38,8 +35,10 @@ struct Readback {
 }
 
 impl Readback {
-    /// Starts mapping the buffer; the shadow is refreshed once the GPU work
-    /// writing it is done.
+    pub(crate) fn is_mapping(&self) -> bool {
+        self.mapping.load(Ordering::Acquire)
+    }
+
     pub(crate) fn pump(self: &Arc<Self>) {
         if self.mapping.swap(true, Ordering::AcqRel) {
             return;
@@ -65,7 +64,6 @@ impl Readback {
     }
 }
 
-/// Readback buffers whose shadows follow the GPU, pumped after every submit.
 #[derive(Default)]
 pub(crate) struct Readbacks(Mutex<Vec<std::sync::Weak<Readback>>>);
 
@@ -86,8 +84,6 @@ impl Readbacks {
     }
 }
 
-/// A buffer and the memory it owns. The default is an empty placeholder, for
-/// `std::mem::take` when an owner frees a buffer it holds by value.
 #[derive(Default)]
 pub struct Buffer {
     key: Key,
@@ -97,8 +93,6 @@ pub struct Buffer {
 struct BufferInner {
     raw: wgpu::Buffer,
     queue: wgpu::Queue,
-    /// Host buffers keep a CPU copy, so writes can be widened to wgpu's
-    /// 4-byte copy alignment.
     shadow: Vec<u8>,
     readback: Option<Arc<Readback>>,
     len: u64,
@@ -171,9 +165,6 @@ impl Buffer {
             })
         })?;
 
-        let key = shared.buffers.insert(BufferEntry {
-            buffer: raw.clone(),
-        });
         let readback = matches!(location, MemoryLocation::Readback).then(|| {
             let readback = Arc::new(Readback {
                 #[cfg(not(target_arch = "wasm32"))]
@@ -185,6 +176,10 @@ impl Buffer {
             });
             shared.readbacks.register(&readback);
             readback
+        });
+        let key = shared.buffers.insert(BufferEntry {
+            buffer: raw.clone(),
+            readback: readback.clone(),
         });
         Ok(Self {
             key,
@@ -202,7 +197,6 @@ impl Buffer {
         })
     }
 
-    /// A host buffer holding `data`.
     pub fn with_data(device: &Device, label: &str, data: &[u8], usage: BufferUsages) -> Self {
         Self::try_with_data(device, label, data, usage).unwrap_or_else(|error| panic!("{error}"))
     }
@@ -228,9 +222,6 @@ impl Buffer {
         BufferHandle(self.key)
     }
 
-    /// Reads a [`MemoryLocation::Readback`] buffer; the caller has already
-    /// waited on the frame that wrote it. On the web, where nothing can block,
-    /// this is the contents as of the latest finished mapping.
     pub fn read<R>(&mut self, read: impl FnOnce(&[u8]) -> R) -> R {
         let inner = self.inner.as_ref().expect("buffer was destroyed");
         let readback = inner
@@ -248,12 +239,10 @@ impl Buffer {
         read(&shadow[..inner.len as usize])
     }
 
-    /// Writes `data` at the start of a [`MemoryLocation::Host`] buffer.
     pub fn write(&mut self, data: &[u8]) {
         self.write_at(0, data);
     }
 
-    /// Writes `data` at byte `offset` of a [`MemoryLocation::Host`] buffer.
     pub fn write_at(&mut self, offset: usize, data: &[u8]) {
         let inner = self.inner.as_mut().expect("buffer was destroyed");
         assert!(!inner.shadow.is_empty(), "buffer is not host-written");
@@ -266,7 +255,6 @@ impl Buffer {
             .write_buffer(&inner.raw, start as u64, &inner.shadow[start..end]);
     }
 
-    /// Zeroes a whole host-written buffer.
     pub fn zero(&mut self) {
         let inner = self.inner.as_mut().expect("buffer was destroyed");
         if let Some(readback) = &inner.readback {
@@ -286,8 +274,6 @@ impl Buffer {
 
 pub(crate) struct TextureEntry {
     pub texture: wgpu::Texture,
-    /// The view shaders sample: every level and layer, in the texture's
-    /// own dimension.
     pub view: wgpu::TextureView,
     pub format: wgpu::TextureFormat,
     attachment: OnceLock<wgpu::TextureView>,
@@ -318,12 +304,10 @@ impl TextureEntry {
         }
     }
 
-    /// The first level and layer as a 2D view, which render passes take.
     pub fn attachment_view(&self) -> wgpu::TextureView {
         self.attachment.get_or_init(|| self.subview(0, 0)).clone()
     }
 
-    /// One level of one layer as a 2D view.
     pub fn subview(&self, mip: u32, layer: u32) -> wgpu::TextureView {
         if let Some(view) = lock(&self.subviews).get(&(mip, layer)) {
             return view.clone();
@@ -342,15 +326,11 @@ impl TextureEntry {
     }
 }
 
-/// A texture, its view of every level and layer, and the memory it owns.
-/// The default is an empty placeholder, like [`Buffer`]'s.
 #[derive(Default)]
 pub struct Texture {
     key: Key,
 }
 
-/// What barriers, copies, bindings and attachments take a texture as: valid
-/// until their owner destroys it.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct TextureHandle(pub(crate) Key);
 
@@ -389,7 +369,6 @@ impl Texture {
         TextureHandle(self.key)
     }
 
-    /// Frees the texture.
     pub fn destroy(self, device: &Device) {
         device.shared.textures.remove(self.key);
     }
@@ -414,8 +393,6 @@ pub fn texture_format(format: TextureFormat) -> wgpu::TextureFormat {
 }
 
 impl Shared {
-    /// The wgpu format for `format`, or why this device can't have textures
-    /// of it.
     pub(crate) fn texture_format(
         &self,
         format: TextureFormat,
@@ -432,9 +409,6 @@ impl Shared {
         Ok(texture_format(format))
     }
 
-    /// The usages of `usage` plus the others the RHI's untracked uses need
-    /// (blits, clears and copies move between them), within what the format
-    /// allows.
     pub(crate) fn texture_usages(
         &self,
         usage: TextureUsages,
@@ -469,7 +443,6 @@ impl Shared {
     }
 }
 
-/// A sampler. Copy: the device keeps the object.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct Sampler(pub(crate) Key);
 
