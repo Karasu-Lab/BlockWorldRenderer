@@ -43,11 +43,11 @@ jobs:
       - name: Build core with all features
         run: nix develop -c cargo build -p core --all-features
 
-      - name: Build for wasm32-unknown-unknown
-        run: nix develop -c cargo build --release --target wasm32-unknown-unknown
+      - name: Install web dependencies
+        run: nix develop -c pnpm --dir apps/web install --frozen-lockfile
 
-      - name: Generate JavaScript bindings
-        run: nix develop -c wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
+      - name: Build the WebAssembly package and copy it into the web app
+        run: nix develop -c just web-wasm
 
       - name: Upload WebAssembly package
         uses: actions/upload-artifact@v4
@@ -55,12 +55,6 @@ jobs:
           name: block-world-renderer-wasm
           path: pkg/
           if-no-files-found: error
-
-      - name: Install web dependencies
-        run: nix develop -c pnpm --dir apps/web install --frozen-lockfile
-
-      - name: Copy the WebAssembly package into the web app
-        run: nix develop -c pnpm --dir apps/web run sync-wasm
 
       - name: Lint the web app
         run: nix develop -c pnpm --dir apps/web run lint

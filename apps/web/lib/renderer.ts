@@ -8,6 +8,8 @@ export interface WorldHandle {
 
 interface RendererModule {
   default(input?: { module_or_path: string }): Promise<unknown>;
+  /** Starts the Web Workers that chunk generation runs on. */
+  initThreadPool(threads: number): Promise<unknown>;
   start(canvas: HTMLCanvasElement): Promise<WorldHandle>;
 }
 
@@ -27,5 +29,6 @@ export async function startWorld(canvas: HTMLCanvasElement): Promise<WorldHandle
     /* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE_URL
   );
   await renderer.default({ module_or_path: WASM_URL });
+  await renderer.initThreadPool(Math.max(2, navigator.hardwareConcurrency || 2));
   return renderer.start(canvas);
 }

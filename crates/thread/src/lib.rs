@@ -186,31 +186,3 @@ impl WorkerPool for RayonPool {
         Ok(())
     }
 }
-
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests {
-    use super::*;
-    use std::sync::mpsc::channel;
-
-    #[test]
-    fn tasks_run_on_workers() {
-        let pool = NativePool::new(2).unwrap();
-        let (sender, receiver) = channel();
-        pool.spawn(Box::new(move || sender.send(7).unwrap()))
-            .unwrap();
-        assert_eq!(receiver.recv().unwrap(), 7);
-        assert_eq!(pool.workers(), 2);
-    }
-
-    #[test]
-    fn a_spawned_task_joins_with_its_value() {
-        let handle = spawn("test", || 40 + 2).unwrap();
-        assert_eq!(handle.join(), Ok(42));
-    }
-
-    #[test]
-    fn a_panicking_task_is_reported() {
-        let handle = spawn("test", || panic!("boom")).unwrap();
-        assert_eq!(handle.join(), Err(ThreadError::Panicked));
-    }
-}

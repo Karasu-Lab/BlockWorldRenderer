@@ -1,6 +1,11 @@
 use std::collections::BTreeMap;
 
+mod location;
+mod stack;
+
+pub use location::{DEFAULT_PACK_DIR, PackLocation};
 pub use registry::ResourceKey;
+pub use stack::{MemoryPack, PackLayer, PackStack};
 use serializer::{SerializerError, Value};
 use thiserror::Error;
 

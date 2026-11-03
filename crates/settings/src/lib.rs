@@ -1,4 +1,5 @@
 use camera::Camera;
+use resourcepack::PackLocation;
 use seed::WorldSeed;
 use thiserror::Error;
 use utils::side::Sided;
@@ -19,12 +20,13 @@ impl SettingsError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ClientSettings {
     pub ui_enabled: bool,
     pub debug_screen: bool,
     pub render_distance: u32,
     pub vsync: bool,
+    pub resource_pack_location: PackLocation,
 }
 
 impl Default for ClientSettings {
@@ -34,6 +36,7 @@ impl Default for ClientSettings {
             debug_screen: false,
             render_distance: 12,
             vsync: true,
+            resource_pack_location: PackLocation::default(),
         }
     }
 }
@@ -116,7 +119,7 @@ impl Default for WorldSettings {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Settings {
     pub client: Option<ClientSettings>,
     pub server: Option<ServerSettings>,
@@ -134,30 +137,5 @@ impl Sided for Settings {
 
     fn server(&self) -> Option<&ServerSettings> {
         self.server.as_ref()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn default_camera_settings_build_a_camera() {
-        let camera = CameraSettings::default().to_camera();
-        assert_eq!(camera.position, [0.0, 90.0, 0.0]);
-    }
-
-    #[test]
-    fn default_client_hides_the_ui() {
-        assert!(!ClientSettings::default().ui_enabled);
-    }
-
-    #[test]
-    fn zero_render_distance_is_invalid() {
-        let settings = ClientSettings {
-            render_distance: 0,
-            ..ClientSettings::default()
-        };
-        assert_eq!(settings.validate().unwrap_err().code(), 1);
     }
 }

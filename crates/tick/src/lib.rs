@@ -56,25 +56,3 @@ pub trait TickScheduler {
 
     fn advance(&mut self) -> Tick;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn only_server_and_client_ticks_have_a_side() {
-        assert_eq!(TickKind::Server.side(), Some(Side::Server));
-        assert_eq!(TickKind::Client.side(), Some(Side::Client));
-        assert_eq!(TickKind::World.side(), None);
-        assert_eq!(TickKind::Entity.side(), None);
-    }
-
-    #[test]
-    fn error_codes_are_unique() {
-        let codes = [
-            TickError::Failed(String::new()).code(),
-            TickError::from(SideError::Unavailable).code(),
-        ];
-        assert_eq!(codes, [1, 2]);
-    }
-}

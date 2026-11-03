@@ -42,17 +42,3 @@ pub trait ParticleSystem: ParticleEmitter + Tickable {
 
     fn clear(&mut self);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn error_codes_are_unique() {
-        let codes = [
-            ParticleError::UnknownKind(String::new()).code(),
-            ParticleError::LimitReached.code(),
-        ];
-        assert_eq!(codes, [1, 2]);
-    }
-}

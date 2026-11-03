@@ -267,7 +267,6 @@ dependencies = [
  "camera",
  "debugger",
  "js-sys",
- "registry",
  "renderer",
  "seed",
  "settings",
@@ -277,7 +276,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
- "wgpu 0.1.0",
  "worldgen",
 ]
 
@@ -2585,6 +2583,7 @@ name = "settings"
 version = "0.1.0"
 dependencies = [
  "camera",
+ "resourcepack",
  "seed",
  "thiserror",
  "utils",

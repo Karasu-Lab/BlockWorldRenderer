@@ -17,15 +17,26 @@ use worldgen::ChunkGenerator;
 
 use crate::error::CanvasError;
 use crate::frame::FrameClock;
-use crate::gpu::CanvasGpu;
-use crate::scene::{ChunkLayout, ChunkScene};
+use crate::scene::{ChunkLayout, ChunkScene, StreamingScene};
 use crate::size::CanvasSize;
+use crate::webgpu::webgpu_available;
+
+/// A renderer the canvas can drive.
+pub trait CanvasRenderer: Renderer + RendererInfoSource + 'static {
+    /// The widest texture the GPU takes, which bounds the canvas' size.
+    fn max_texture_dimension(&self) -> u32;
+}
 
 /// Builds the renderer that draws into a canvas' surface.
 pub trait RendererFactory {
-    type Renderer: Renderer + RendererInfoSource + 'static;
+    type Renderer: CanvasRenderer;
 
-    fn create(self, gpu: CanvasGpu) -> impl Future<Output = Result<Self::Renderer, RendererError>>;
+    /// Opens the GPU for `canvas`, whose backing store is `size` big.
+    fn create(
+        self,
+        canvas: HtmlCanvasElement,
+        size: CanvasSize,
+    ) -> impl Future<Output = Result<Self::Renderer, RendererError>>;
 }
 
 pub struct CanvasOptions {
@@ -75,7 +86,7 @@ struct State {
     window: Window,
     canvas: HtmlCanvasElement,
     renderer: Box<dyn Renderer>,
-    scene: Box<dyn RenderScene>,
+    scene: Box<dyn StreamingScene>,
     camera: Camera,
     size: CanvasSize,
     max_dimension: u32,
@@ -116,8 +127,9 @@ impl State {
         if size != self.size {
             self.apply_size(size);
         }
-        self.renderer
-            .render_frame(&self.camera, self.scene.as_ref())?;
+        self.scene.poll()?;
+        let scene: &dyn RenderScene = self.scene.as_ref();
+        self.renderer.render_frame(&self.camera, scene)?;
         self.ui
             .render()
             .map_err(|error| CanvasError::Setup(error.to_string()))?;
@@ -148,8 +160,11 @@ impl Canvas {
     ) -> Result<Self, CanvasError>
     where
         F: RendererFactory,
-        G: ChunkGenerator + 'static,
+        G: ChunkGenerator + Send + Sync + 'static,
     {
+        if !webgpu_available() {
+            return Err(CanvasError::Unsupported);
+        }
         let window =
             web_sys::window().ok_or_else(|| CanvasError::Setup("there is no window".into()))?;
         let CanvasOptions {
@@ -168,15 +183,14 @@ impl Canvas {
         canvas.set_width(initial.width);
         canvas.set_height(initial.height);
 
-        let gpu = CanvasGpu::request(&canvas, initial).await?;
-        let max_dimension = gpu.max_texture_dimension();
+        let mut renderer = factory.create(canvas.clone(), initial).await?;
+        let max_dimension = renderer.max_texture_dimension();
         let size = CanvasSize::from_css(
             f64::from(canvas.client_width()),
             f64::from(canvas.client_height()),
             window.device_pixel_ratio(),
             max_dimension,
         );
-        let mut renderer = factory.create(gpu).await?;
         let renderer_info = renderer.renderer_info();
         renderer.resize(RenderTarget {
             width: size.width,
@@ -187,7 +201,7 @@ impl Canvas {
 
         let camera = settings.camera.to_camera();
         let mut scene = ChunkScene::new(generator, settings.world.seed, layout);
-        scene.load_around(&camera, client.render_distance)?;
+        scene.request_around(&camera, client.render_distance)?;
 
         let fps = Rc::new(Cell::new(0.0));
         let mut debug = DebugScreen::new();

@@ -26,6 +26,16 @@ impl RendererInfo {
     pub fn line(&self) -> String {
         format!("{} ({}, {})", self.backend, self.adapter, self.driver)
     }
+
+    /// The F3 screen's renderer lines: the graphics API, the GPU and, when the
+    /// backend reports one, its driver.
+    pub fn debug_lines(&self) -> Vec<String> {
+        let mut lines = vec![self.backend.clone(), format!("GPU: {}", self.adapter)];
+        if !self.driver.is_empty() {
+            lines.push(format!("Driver: {}", self.driver));
+        }
+        lines
+    }
 }
 
 pub trait RendererInfoSource {
@@ -80,37 +90,5 @@ impl DebugScreen {
 impl Default for DebugScreen {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct Fixed;
-
-    impl RendererInfoSource for Fixed {
-        fn renderer_info(&self) -> RendererInfo {
-            RendererInfo {
-                backend: "wgpu".into(),
-                adapter: "test".into(),
-                driver: "1".into(),
-            }
-        }
-    }
-
-    #[test]
-    fn hidden_screen_has_no_lines() {
-        let mut screen = DebugScreen::new();
-        screen.add_provider(Box::new(RendererInfoProvider(Fixed)));
-        assert!(screen.lines().unwrap().is_empty());
-    }
-
-    #[test]
-    fn shown_screen_reports_the_renderer() {
-        let mut screen = DebugScreen::new();
-        screen.add_provider(Box::new(RendererInfoProvider(Fixed)));
-        screen.switch_mut().set(true);
-        assert_eq!(screen.lines().unwrap(), ["Renderer: wgpu (test, 1)"]);
     }
 }

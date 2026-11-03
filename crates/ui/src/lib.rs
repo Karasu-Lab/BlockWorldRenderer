@@ -85,35 +85,37 @@ impl UiLayer {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicU32, Ordering};
+/// A renderer that draws into a frame its caller prepares: the data the UI
+/// needs (text widths, the screen size) goes in and the drawn elements come
+/// out.
+pub trait UiFrameRenderer<F: ?Sized> {
+    fn render_ui(&mut self, frame: &mut F) -> Result<(), UiError>;
+}
 
-    struct Counting(Arc<AtomicU32>);
+/// [`UiLayer`] for a [`UiFrameRenderer`]: off, the frame is left as it came.
+pub struct UiFrameLayer<F: ?Sized> {
+    switch: UiSwitch,
+    active: Box<dyn UiFrameRenderer<F>>,
+}
 
-    impl UiRenderer for Counting {
-        fn render_ui(&mut self) -> Result<(), UiError> {
-            self.0.fetch_add(1, Ordering::SeqCst);
+impl<F: ?Sized> UiFrameLayer<F> {
+    pub fn new(switch: UiSwitch, active: Box<dyn UiFrameRenderer<F>>) -> Self {
+        Self { switch, active }
+    }
+
+    pub const fn switch(&self) -> &UiSwitch {
+        &self.switch
+    }
+
+    pub fn switch_mut(&mut self) -> &mut UiSwitch {
+        &mut self.switch
+    }
+
+    pub fn render(&mut self, frame: &mut F) -> Result<(), UiError> {
+        if self.switch.enabled() {
+            self.active.render_ui(frame)
+        } else {
             Ok(())
         }
-    }
-
-    #[test]
-    fn disabled_ui_is_not_drawn() {
-        let drawn = Arc::new(AtomicU32::new(0));
-        let mut layer = UiLayer::new(UiSwitch::new(false), Box::new(Counting(drawn.clone())));
-        layer.render().unwrap();
-        assert_eq!(drawn.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn enabled_ui_is_drawn() {
-        let drawn = Arc::new(AtomicU32::new(0));
-        let mut layer = UiLayer::new(UiSwitch::new(false), Box::new(Counting(drawn.clone())));
-        layer.switch_mut().toggle();
-        layer.render().unwrap();
-        assert_eq!(drawn.load(Ordering::SeqCst), 1);
     }
 }

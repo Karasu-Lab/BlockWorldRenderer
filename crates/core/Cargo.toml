@@ -3,8 +3,13 @@ name = "core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+# The package keeps the name `core`, but a library of that name clashes with
+# the standard library's when it is built with `-Zbuild-std` for wasm32.
+name = "engine"
+
 [dependencies]
-block = { version = "0.1.0", path = "../block", optional = true }
+block ={ version = "0.1.0", path = "../block", optional = true }
 camera = { version = "0.1.0", path = "../camera", optional = true }
 canvas = { version = "0.1.0", path = "../canvas", optional = true }
 data = { version = "0.1.0", path = "../data", optional = true }
@@ -84,7 +89,7 @@ resourcepack = ["dep:resourcepack", "registry", "serializer"]
 seed = ["dep:seed", "random"]
 serializer = ["dep:serializer"]
 server = ["dep:server", "network", "worldtick", "worldgen", "storage", "entity", "registry"]
-settings = ["dep:settings", "camera", "seed", "utils"]
+settings = ["dep:settings", "camera", "resourcepack", "seed", "utils"]
 shader = ["dep:shader", "resourcepack"]
 storage = ["dep:storage", "registry", "serializer"]
 thread = ["dep:thread"]

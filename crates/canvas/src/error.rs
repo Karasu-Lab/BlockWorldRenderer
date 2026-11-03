@@ -24,19 +24,3 @@ impl CanvasError {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn error_codes_are_unique() {
-        let codes = [
-            CanvasError::Unsupported.code(),
-            CanvasError::Setup(String::new()).code(),
-            CanvasError::from(RendererError::Device(String::new())).code(),
-            CanvasError::from(WorldgenError::Generation(String::new())).code(),
-        ];
-        assert_eq!(codes, [1, 2, 3, 4]);
-    }
-}

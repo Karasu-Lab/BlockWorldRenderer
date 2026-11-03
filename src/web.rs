@@ -1,9 +1,11 @@
-use core::canvas::{Canvas, CanvasOptions};
-use core::settings::{ClientSettings, Settings};
+use engine::canvas::{Canvas, CanvasOptions};
+use engine::settings::{ClientSettings, Settings};
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
-use crate::backend::{WgpuFactory, world_generator};
+use crate::backend::{ClearSource, WgpuFactory, world_generator};
+
+const BACKGROUND: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 /// A world drawing into a canvas.
 #[wasm_bindgen]
@@ -38,7 +40,7 @@ pub async fn start(canvas: HtmlCanvasElement) -> Result<WorldHandle, JsError> {
         canvas,
         CanvasOptions::new(settings),
         world_generator(),
-        WgpuFactory,
+        WgpuFactory::new(ClearSource(BACKGROUND)),
     )
     .await
     .map_err(|error| JsError::new(&error.to_string()))?;

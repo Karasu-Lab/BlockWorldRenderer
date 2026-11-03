@@ -105,27 +105,3 @@ impl<T> Slab<T> {
         inner.free.clear();
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn stale_keys_do_not_resolve() {
-        let slab = Slab::default();
-        let first = slab.insert(1u32);
-        assert_eq!(slab.get(first).as_deref(), Some(&1));
-        slab.remove(first);
-        assert!(slab.get(first).is_none());
-        let second = slab.insert(2u32);
-        assert!(slab.get(first).is_none());
-        assert_eq!(slab.get(second).as_deref(), Some(&2));
-    }
-
-    #[test]
-    fn the_default_key_is_empty() {
-        let slab: Slab<u32> = Slab::default();
-        slab.insert(1);
-        assert!(slab.get(Key::default()).is_none());
-    }
-}

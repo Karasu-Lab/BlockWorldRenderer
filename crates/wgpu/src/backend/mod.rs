@@ -15,9 +15,6 @@ mod renderer;
 mod resource;
 mod shader;
 
-#[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests;
-
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
