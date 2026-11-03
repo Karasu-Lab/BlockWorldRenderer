@@ -83,3 +83,21 @@ sed -i 's/block_world_renderer_bg\.wasm/block_world_renderer.wasm/g' pkg/block_w
 ```sh
 cargo test --workspace
 ```
+
+## License
+
+### Third-party notices
+
+The replay support in this project (the `replayer` crate) was written
+with reference to the ReplayMod source code, including the ReplayStudio
+library that defines the `.mcpr` file format.
+
+- [ReplayMod](https://github.com/ReplayMod/ReplayMod) is provided under
+  the terms of the GNU General Public License Version 3 or (at your
+  option) any later version. See `LICENSE.md` in the ReplayMod
+  repository for the full license text.
+- [ReplayStudio](https://github.com/ReplayMod/ReplayStudio) is free
+  software under the terms of the GNU Lesser General Public License as
+  published by the Free Software Foundation, either version 3 of the
+  License, or (at your option) any later version. See `COPYING` and
+  `COPYING.LESSER` in the ReplayStudio repository for more information.
