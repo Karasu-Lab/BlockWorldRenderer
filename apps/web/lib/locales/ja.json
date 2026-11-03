@@ -1,0 +1,7 @@
+{
+  "webgpuUnsupported": "このブラウザは WebGPU に対応していません。",
+  "errors": {
+    "startFailed": "ワールドの描画を開始できませんでした。",
+    "unexpected": "予期しないエラーが発生しました。"
+  }
+}

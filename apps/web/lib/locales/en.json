@@ -1,0 +1,7 @@
+{
+  "webgpuUnsupported": "This browser does not support WebGPU.",
+  "errors": {
+    "startFailed": "The world could not be started.",
+    "unexpected": "An unexpected error occurred."
+  }
+}

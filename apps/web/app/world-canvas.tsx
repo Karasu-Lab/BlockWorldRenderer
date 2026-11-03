@@ -1,17 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useTranslation } from "react-i18next";
 import { Progress } from "@/components/ui/progress";
+import { UserFacingError } from "@/lib/errors";
 import { hasWebGpu, startWorld, type LoadProgress } from "@/lib/renderer";
 
 const subscribeToNothing = () => () => {};
 
 export function WorldCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const { t } = useTranslation();
   const [progress, setProgress] = useState<LoadProgress | null>(null);
-  // The server cannot tell, so it renders as if WebGPU were there.
-  const supported = useSyncExternalStore(subscribeToNothing, hasWebGpu, () => true);
+  const supported = useSyncExternalStore(
+    subscribeToNothing,
+    hasWebGpu,
+    () => true,
+  );
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -19,8 +24,6 @@ export function WorldCanvas() {
 
     let cancelled = false;
     let stop: (() => void) | undefined;
-    // Indeterminate until the wasm side confirms the renderer is
-    // available; the download's own progress counts from there.
     setProgress({ available: false, fraction: 0, status: "" });
     startWorld(canvas, (next) => {
       if (!cancelled) setProgress(next);
@@ -39,32 +42,37 @@ export function WorldCanvas() {
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        console.error(error);
         setProgress(null);
-        setFailure("ワールドの描画を開始できませんでした。");
+        throw new UserFacingError(t("errors.startFailed"), error);
       });
 
-    return () => {
+    const release = () => {
       cancelled = true;
       stop?.();
+      stop = undefined;
     };
-  }, [supported]);
+    window.addEventListener("pagehide", release);
+
+    return () => {
+      window.removeEventListener("pagehide", release);
+      release();
+    };
+  }, [supported, t]);
 
   return (
     <>
       <canvas ref={canvasRef} className="world" />
-      {!supported && (
-        <p className="notice">このブラウザは WebGPU に対応していません。</p>
-      )}
-      {failure && <p className="notice">{failure}</p>}
+      {!supported && <p className="notice">{t("webgpuUnsupported")}</p>}
       {progress && (
         <div className="fixed inset-x-0 bottom-0 p-4">
           {progress.available && progress.status && (
-            <p className="mb-2 font-[system-ui] text-sm text-neutral-200">
+            <p className="mb-2 font-[system-ui] text-sm text-foreground">
               {progress.status}
             </p>
           )}
-          <Progress value={progress.available ? progress.fraction * 100 : null} />
+          <Progress
+            value={progress.available ? progress.fraction * 100 : null}
+          />
         </div>
       )}
     </>

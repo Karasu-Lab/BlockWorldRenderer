@@ -10,7 +10,6 @@ body {
   height: 100%;
   margin: 0;
   overflow: hidden;
-  background: #000;
 }
 
 .world {
@@ -27,7 +26,7 @@ body {
   display: grid;
   place-items: center;
   padding: 1rem;
-  color: #ededed;
+  color: var(--foreground);
   font-family: system-ui, sans-serif;
   text-align: center;
 }
