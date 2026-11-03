@@ -69,13 +69,17 @@ async function staleWhileRevalidate(request, cacheName) {
   return update;
 }
 
+// The path the app is served under ("" at a root, "/BlockWorldRenderer"
+// on the GitHub Pages project site), derived from this worker's own URL.
+const BASE_PATH = self.location.pathname.replace(/\/sw\.js$/, "");
+
 async function respond(request) {
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
-    if (url.pathname.startsWith("/wasm/")) {
+    if (url.pathname.startsWith(`${BASE_PATH}/wasm/`)) {
       return isolate(await staleWhileRevalidate(request, WASM_CACHE));
     }
-    if (url.pathname.startsWith("/resources/")) {
+    if (url.pathname.startsWith(`${BASE_PATH}/resources/`)) {
       return isolate(await cacheFirst(request, RESOURCE_CACHE));
     }
     return isolate(await fetch(request));

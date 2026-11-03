@@ -7,9 +7,17 @@ const isolationHeaders = [
   { key: "Cross-Origin-Embedder-Policy", value: "require-corp" },
 ];
 
+// Set for the GitHub Pages demo, which serves the app from a project
+// subpath as plain static files. Other builds leave both unset.
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const staticExport = process.env.STATIC_EXPORT === "1";
+
 const nextConfig: NextConfig = {
-  cacheComponents: true,
-  partialPrefetching: true,
+  basePath: basePath || undefined,
+  output: staticExport ? "export" : undefined,
+  // Partial prerendering is not available to a static export.
+  cacheComponents: !staticExport,
+  partialPrefetching: !staticExport,
   async headers() {
     return [
       { source: "/:path*", headers: isolationHeaders },

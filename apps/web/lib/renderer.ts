@@ -27,8 +27,9 @@ export interface LoadProgress {
   status: string;
 }
 
-const MODULE_URL = "/wasm/block_world_renderer.js";
-const WASM_URL = "/wasm/block_world_renderer_bg.wasm";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
+const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer_bg.wasm`;
 
 export function hasWebGpu(): boolean {
   return typeof navigator !== "undefined" && "gpu" in navigator;

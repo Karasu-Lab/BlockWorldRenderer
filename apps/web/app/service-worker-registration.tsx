@@ -8,8 +8,9 @@ export function ServiceWorkerRegistration() {
   useEffect(() => {
     if (!("serviceWorker" in navigator)) return;
 
+    const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
     navigator.serviceWorker
-      .register("/sw.js", { scope: "/", updateViaCache: "none" })
+      .register(`${basePath}/sw.js`, { scope: `${basePath}/`, updateViaCache: "none" })
       .then(() => navigator.serviceWorker.ready)
       .then(() => {
         // The worker adds the isolation headers, so a page it did not serve
