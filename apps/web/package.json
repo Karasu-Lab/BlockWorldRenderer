@@ -3,12 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/fetch-wasm.mjs && next dev",
+    "build": "node scripts/fetch-wasm.mjs && next build",
     "start": "next start",
     "lint": "eslint",
-    "sync-wasm": "node scripts/sync-wasm.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "fetch-wasm": "node scripts/fetch-wasm.mjs"
   },
   "dependencies": {
     "next": "16.4.4",

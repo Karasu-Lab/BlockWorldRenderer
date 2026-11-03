@@ -1,0 +1,56 @@
+name: Release
+
+# Builds the wasm package and publishes it as a GitHub Release asset, which
+# the web app downloads at build time (apps/web/scripts/fetch-wasm.mjs).
+# Release by pushing a version tag, or run manually with a tag name.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build the WebAssembly package and release it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build the WebAssembly package
+        run: nix develop -c just web-wasm
+
+      - name: Package the release asset
+        run: |
+          tar -czf block-world-renderer-wasm.tar.gz \
+            --exclude='package.json' \
+            --exclude='.gitignore' \
+            --exclude='*.d.ts' \
+            -C pkg .
+          tar -tzf block-world-renderer-wasm.tar.gz
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "$TAG" \
+            --generate-notes \
+            block-world-renderer-wasm.tar.gz

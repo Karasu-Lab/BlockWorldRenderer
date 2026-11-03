@@ -40,5 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# wasm package copied from the repository root
+# wasm package provided by scripts/fetch-wasm.mjs
 /public/wasm/
