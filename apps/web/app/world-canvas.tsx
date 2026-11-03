@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { hasWebGpu, startWorld } from "@/lib/renderer";
+import { hasWebGpu, startWorld, type LoadProgress } from "@/lib/renderer";
 
 const subscribeToNothing = () => () => {};
 
 export function WorldCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const [progress, setProgress] = useState<LoadProgress | null>(null);
   // The server cannot tell, so it renders as if WebGPU were there.
   const supported = useSyncExternalStore(subscribeToNothing, hasWebGpu, () => true);
 
@@ -17,8 +18,9 @@ export function WorldCanvas() {
 
     let cancelled = false;
     let stop: (() => void) | undefined;
-    startWorld(canvas)
+    startWorld(canvas, setProgress)
       .then((world) => {
+        setProgress(null);
         if (cancelled) {
           world.stop();
           world.free();
@@ -48,6 +50,11 @@ export function WorldCanvas() {
         <p className="notice">このブラウザは WebGPU に対応していません。</p>
       )}
       {failure && <p className="notice">{failure}</p>}
+      {progress && progress.status && (
+        <p className="notice">
+          {progress.status} ({Math.round(progress.fraction * 100)}%)
+        </p>
+      )}
     </>
   );
 }

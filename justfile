@@ -1,7 +1,9 @@
 # The worker threads of the wasm build share one memory, which needs atomics, a
-# shared imported memory and exported thread-local storage. The dev shell sets
+# shared imported memory and exported thread-local storage. tokio builds its
+# OS-backed features for wasm only under `tokio_unstable` (the client's azalea-auth
+# asks for `fs`). The dev shell sets
 # RUSTFLAGS for the native libraries, so these are set inside it with `env`.
-wasm_rustflags := '--cfg getrandom_backend="wasm_js" -C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base'
+wasm_rustflags := '--cfg getrandom_backend="wasm_js" --cfg tokio_unstable -C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base'
 
 # Builds the wasm package and copies it into the web app.
 web-wasm:
