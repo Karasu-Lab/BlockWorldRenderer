@@ -176,6 +176,7 @@ impl Context {
     }
 
     async fn instance() -> wgpu::Instance {
+        #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         #[cfg(target_arch = "wasm32")]
         if !browser_has_webgpu_adapter().await {

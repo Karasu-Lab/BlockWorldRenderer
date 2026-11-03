@@ -236,6 +236,11 @@ impl Device {
         Ok(())
     }
 
+    /// Releases every resource the device owns.
+    ///
+    /// # Safety
+    ///
+    /// No handle created from this device may be used afterwards.
     pub unsafe fn destroy(&mut self) {
         self.wait_idle();
         let shared = &self.shared;
