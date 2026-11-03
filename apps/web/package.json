@@ -3,11 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/fetch-wasm.mjs && next dev",
+    "build": "node scripts/fetch-wasm.mjs && next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "next typegen && tsc --noEmit"
+    "typecheck": "next typegen && tsc --noEmit",
+    "fetch-wasm": "node scripts/fetch-wasm.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
