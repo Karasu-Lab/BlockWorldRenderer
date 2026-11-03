@@ -19,7 +19,7 @@ use crate::error::CanvasError;
 use crate::frame::FrameClock;
 use crate::scene::{ChunkLayout, ChunkScene, StreamingScene};
 use crate::size::CanvasSize;
-use crate::webgpu::webgpu_available;
+use crate::webgpu::{webgl2_available, webgpu_available};
 
 /// A renderer the canvas can drive.
 pub trait CanvasRenderer: Renderer + RendererInfoSource + 'static {
@@ -162,7 +162,7 @@ impl Canvas {
         F: RendererFactory,
         G: ChunkGenerator + Send + Sync + 'static,
     {
-        if !webgpu_available() {
+        if !webgpu_available() && !webgl2_available() {
             return Err(CanvasError::Unsupported);
         }
         let window =

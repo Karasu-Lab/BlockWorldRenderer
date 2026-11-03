@@ -28,8 +28,10 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
 const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer.wasm`;
 
-export function hasWebGpu(): boolean {
-  return typeof navigator !== "undefined" && "gpu" in navigator;
+export function hasGraphicsApi(): boolean {
+  if (typeof navigator === "undefined") return false;
+  if ("gpu" in navigator) return true;
+  return document.createElement("canvas").getContext("webgl2") !== null;
 }
 
 let loading: Promise<RendererModule> | undefined;

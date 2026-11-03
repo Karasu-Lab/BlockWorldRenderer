@@ -4,7 +4,7 @@ use worldgen::WorldgenError;
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CanvasError {
-    #[error("the browser does not provide WebGPU")]
+    #[error("the browser provides neither WebGPU nor WebGL2")]
     Unsupported,
     #[error("failed to set up the canvas: {0}")]
     Setup(String),

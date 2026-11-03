@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Progress } from "@/components/ui/progress";
 import { UserFacingError } from "@/lib/errors";
-import { hasWebGpu, startWorld, type LoadProgress } from "@/lib/renderer";
+import { hasGraphicsApi, startWorld, type LoadProgress } from "@/lib/renderer";
 
 const subscribeToNothing = () => () => {};
 
@@ -14,7 +14,7 @@ export function WorldCanvas() {
   const [progress, setProgress] = useState<LoadProgress | null>(null);
   const supported = useSyncExternalStore(
     subscribeToNothing,
-    hasWebGpu,
+    hasGraphicsApi,
     () => true,
   );
 
@@ -62,7 +62,7 @@ export function WorldCanvas() {
   return (
     <>
       <canvas ref={canvasRef} className="world" />
-      {!supported && <p className="notice">{t("webgpuUnsupported")}</p>}
+      {!supported && <p className="notice">{t("graphicsUnsupported")}</p>}
       {progress && (
         <div className="fixed inset-x-0 bottom-0 p-4">
           {progress.available && progress.status && (
