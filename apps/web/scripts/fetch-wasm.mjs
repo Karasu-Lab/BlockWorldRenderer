@@ -3,7 +3,7 @@
 // Karasu-Lab/BlockWorldRenderer (asset block-world-renderer-wasm.tar.gz),
 // unless the repository root holds a locally built pkg/ from
 // `just web-wasm`, which takes precedence so CI and local renderer work use
-// the build they just made. Set BWR_WASM_TAG to pin a release tag; the
+// the build they just made. Set BLOCK_WORLD_RENDERER_WASM_TAG to pin a release tag; the
 // default is the latest release. The worker helpers under snippets/ come
 // along either way, since the thread pool starts them.
 import { execFile } from "node:child_process";
@@ -50,7 +50,7 @@ async function installFromRelease(tag) {
   if (!response.ok) {
     throw new Error(`Download failed: ${response.status} ${response.statusText} (${url})`);
   }
-  const staging = join(tmpdir(), `bwr-wasm-${process.pid}`);
+  const staging = join(tmpdir(), `block-world-renderer-wasm-${process.pid}`);
   await rm(staging, { recursive: true, force: true });
   await mkdir(staging, { recursive: true });
   try {
@@ -72,7 +72,7 @@ async function installFromRelease(tag) {
   }
 }
 
-const pinned = process.env.BWR_WASM_TAG;
+const pinned = process.env.BLOCK_WORLD_RENDERER_WASM_TAG;
 if (pinned) {
   if ((await currentStamp()) === pinned && (await hasWasm(target))) {
     console.log(`wasm package ${pinned} already installed.`);
@@ -86,7 +86,7 @@ if (pinned) {
   if (!latest.ok) {
     throw new Error(
       `Could not resolve the latest release of ${REPO}: ${latest.status} ${latest.statusText}. ` +
-        "Build the package locally with `just web-wasm` or set BWR_WASM_TAG.",
+        "Build the package locally with `just web-wasm` or set BLOCK_WORLD_RENDERER_WASM_TAG.",
     );
   }
   const { tag_name: tag } = await latest.json();
