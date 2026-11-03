@@ -81,10 +81,12 @@ async function respond(request) {
     }
     if (url.pathname.startsWith(`${BASE_PATH}/resources/`)) {
       // The app addresses game resources under the site's own origin; the
-      // files themselves are Mojang's, keyed by hash.
+      // files themselves are Mojang's, keyed by hash. Mojang's resource
+      // host sends no CORS headers, so the worker cannot fetch it
+      // directly — the API relays the same path with CORS headers.
       const object = url.pathname.slice(`${BASE_PATH}/resources/`.length);
       const upstream = new Request(
-        `https://resources.download.minecraft.net/${object}`,
+        `https://api.karasu256.com/api/proxy/mojang/${object}`,
         { headers: request.headers },
       );
       return isolate(await cacheFirst(upstream, RESOURCE_CACHE));
