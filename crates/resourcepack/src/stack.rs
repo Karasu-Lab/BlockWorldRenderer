@@ -42,14 +42,19 @@ impl<T> PackStack<T> {
     pub fn insert(&mut self, id: impl Into<String>, priority: i32, pack: T) -> Option<T> {
         let id = id.into();
         let replaced = self.remove(&id);
-        let at = self.layers.partition_point(|layer| layer.priority <= priority);
+        let at = self
+            .layers
+            .partition_point(|layer| layer.priority <= priority);
         self.layers.insert(at, PackLayer { id, priority, pack });
         replaced
     }
 
     /// Puts `pack` above every pack already stacked.
     pub fn push(&mut self, id: impl Into<String>, pack: T) -> Option<T> {
-        let priority = self.layers.last().map_or(0, |top| top.priority.saturating_add(1));
+        let priority = self
+            .layers
+            .last()
+            .map_or(0, |top| top.priority.saturating_add(1));
         self.insert(id, priority, pack)
     }
 

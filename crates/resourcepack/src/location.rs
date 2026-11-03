@@ -61,14 +61,19 @@ impl PackLocation {
         if text.is_empty() || text == "default" {
             return Ok(PackLocation::Default);
         }
-        let invalid = |reason: &str| ResourcePackError::Invalid(format!("pack location `{text}`: {reason}"));
+        let invalid =
+            |reason: &str| ResourcePackError::Invalid(format!("pack location `{text}`: {reason}"));
         let (kind, value) = text
             .split_once(':')
             .ok_or_else(|| invalid("expected `dir:`, `namespace:` or `url:`"))?;
         match kind {
             "dir" if !value.is_empty() => Ok(PackLocation::Directory(PathBuf::from(value))),
             "namespace" if !value.is_empty() => Ok(PackLocation::Namespace(value.to_owned())),
-            "url" if value.starts_with("http://") || value.starts_with("https://") || value.starts_with('/') => {
+            "url"
+                if value.starts_with("http://")
+                    || value.starts_with("https://")
+                    || value.starts_with('/') =>
+            {
                 Ok(PackLocation::Url(value.trim_end_matches('/').to_owned()))
             }
             "dir" | "namespace" => Err(invalid("the value is empty")),
@@ -80,6 +85,12 @@ impl PackLocation {
 
 fn sanitize(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
