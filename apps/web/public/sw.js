@@ -80,7 +80,14 @@ async function respond(request) {
       return isolate(await staleWhileRevalidate(request, WASM_CACHE));
     }
     if (url.pathname.startsWith(`${BASE_PATH}/resources/`)) {
-      return isolate(await cacheFirst(request, RESOURCE_CACHE));
+      // The app addresses game resources under the site's own origin; the
+      // files themselves are Mojang's, keyed by hash.
+      const object = url.pathname.slice(`${BASE_PATH}/resources/`.length);
+      const upstream = new Request(
+        `https://resources.download.minecraft.net/${object}`,
+        { headers: request.headers },
+      );
+      return isolate(await cacheFirst(upstream, RESOURCE_CACHE));
     }
     return isolate(await fetch(request));
   }
