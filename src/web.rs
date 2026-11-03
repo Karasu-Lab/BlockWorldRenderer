@@ -1,4 +1,5 @@
 use std::io;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use engine::settings::{ClientSettings, Settings};
@@ -31,6 +32,16 @@ pub fn load_progress() -> f32 {
 #[wasm_bindgen]
 pub fn load_status() -> String {
     loading().status.clone()
+}
+
+/// Set once `start` has confirmed a GPU device can be created, before any
+/// downloading begins; the page shows download progress only after this.
+static RENDERER_AVAILABLE: AtomicBool = AtomicBool::new(false);
+
+/// Whether the renderer can run on this browser's GPU.
+#[wasm_bindgen]
+pub fn renderer_available() -> bool {
+    RENDERER_AVAILABLE.load(Ordering::Relaxed)
 }
 
 /// A world drawing into a canvas.
@@ -80,6 +91,14 @@ pub async fn start(
         ..Settings::default()
     };
     let client = settings.client.clone().unwrap_or_default();
+
+    // The renderer is no use without a GPU: confirm one before the
+    // download starts, so the page never shows progress for a world that
+    // cannot be drawn.
+    engine::wgpu::backend::Device::headless_async(true)
+        .await
+        .map_err(failure)?;
+    RENDERER_AVAILABLE.store(true, Ordering::Relaxed);
 
     let mut endpoints = Endpoints::default();
     if let Some(url) = version_manifest {
