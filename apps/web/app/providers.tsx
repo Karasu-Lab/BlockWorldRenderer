@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { UserFacingError, describe } from "@/lib/errors";
 import i18n from "@/lib/i18n";
+import { ReplayProvider } from "@/lib/replay";
+import { WorldProvider } from "@/lib/world";
 
 function ErrorBody({ title, detail }: { title: string; detail: string }) {
   const { t } = useTranslation();
@@ -67,7 +69,9 @@ export function Providers({ children }: { children: ReactNode }) {
     >
       <I18nextProvider i18n={i18n}>
         <GlobalErrorToasts />
-        {children}
+        <WorldProvider>
+          <ReplayProvider>{children}</ReplayProvider>
+        </WorldProvider>
         <Toaster />
       </I18nextProvider>
     </ThemeProvider>

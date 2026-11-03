@@ -1,6 +1,12 @@
 pub use engine;
 
 #[cfg(target_arch = "wasm32")]
+mod entity;
+#[cfg(all(target_arch = "wasm32", feature = "replay"))]
+mod replay;
+#[cfg(all(target_arch = "wasm32", feature = "save"))]
+mod save;
+#[cfg(target_arch = "wasm32")]
 mod web;
 
 /// The page's thread pool, which chunk generation runs on; JavaScript awaits

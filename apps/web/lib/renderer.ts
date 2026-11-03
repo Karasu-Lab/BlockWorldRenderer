@@ -1,7 +1,41 @@
 export interface WorldHandle {
   stop(): void;
   set_ui_enabled(enabled: boolean): void;
+  set_camera(
+    x: number,
+    y: number,
+    z: number,
+    yawDeg: number,
+    pitchDeg: number,
+  ): void;
   debug_lines(): string[];
+  free(): void;
+}
+
+/** One entity of a replay or a world save, as the wasm side reports it. */
+export interface EntityInfo {
+  id: number | null;
+  uuid: string | null;
+  name: string | null;
+  isPlayer: boolean;
+  position: [number, number, number] | null;
+  yaw: number;
+  pitch: number;
+}
+
+export interface ReplayHandle {
+  duration_ms(): number;
+  position_ms(): number;
+  mc_version(): string;
+  protocol(): number | undefined;
+  apply_until(targetMs: number): void;
+  entities_json(): string;
+  free(): void;
+}
+
+export interface SaveHandle {
+  seed(): bigint;
+  players_json(): string;
   free(): void;
 }
 
@@ -12,7 +46,26 @@ interface RendererModule {
     canvas: HTMLCanvasElement,
     versionManifest?: string,
     resourcesBase?: string,
+    seed?: bigint,
+    camera?: Float64Array,
   ): Promise<WorldHandle>;
+  start_replay(
+    canvas: HTMLCanvasElement,
+    versionManifest: string | undefined,
+    resourcesBase: string | undefined,
+    seed: bigint | undefined,
+    camera: Float64Array | undefined,
+    replay: ReplayHandle,
+  ): Promise<WorldHandle>;
+  start_save(
+    canvas: HTMLCanvasElement,
+    versionManifest: string | undefined,
+    resourcesBase: string | undefined,
+    camera: Float64Array | undefined,
+    save: SaveHandle,
+  ): Promise<WorldHandle>;
+  open_replay(bytes: Uint8Array): ReplayHandle;
+  open_save(bytes: Uint8Array): SaveHandle;
   load_progress(): number;
   load_status(): string;
   renderer_available(): boolean;
@@ -24,9 +77,26 @@ export interface LoadProgress {
   status: string;
 }
 
+/** A camera the providers describe: position plus look, in degrees. */
+export interface CameraSpec {
+  position: [number, number, number];
+  yaw: number;
+  pitch: number;
+}
+
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
 const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer.wasm`;
+
+/** The URL a file under `public/replays` is served at. */
+export function replayUrl(path: string): string {
+  return `${BASE_PATH}/replays/${path}`;
+}
+
+/** The URL a user-supplied file path (a world save zip) is served at. */
+export function publicUrl(path: string): string {
+  return path.startsWith("/") ? `${BASE_PATH}${path}` : `${BASE_PATH}/${path}`;
+}
 
 export function hasGraphicsApi(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -72,9 +142,26 @@ async function waitForServiceWorker(): Promise<void> {
   });
 }
 
-export async function startWorld(
-  canvas: HTMLCanvasElement,
-  onProgress: (progress: LoadProgress) => void = () => {},
+export interface StartOptions {
+  seed?: bigint;
+  camera?: CameraSpec;
+  onProgress?: (progress: LoadProgress) => void;
+}
+
+function cameraArray(camera?: CameraSpec): Float64Array | undefined {
+  if (!camera) return undefined;
+  return new Float64Array([
+    camera.position[0],
+    camera.position[1],
+    camera.position[2],
+    camera.yaw,
+    camera.pitch,
+  ]);
+}
+
+async function startWith(
+  onProgress: ((progress: LoadProgress) => void) | undefined,
+  start: (renderer: RendererModule, resourcesBase: string) => Promise<WorldHandle>,
 ): Promise<WorldHandle> {
   const renderer = await loadRenderer();
   await waitForServiceWorker();
@@ -83,7 +170,7 @@ export async function startWorld(
     new URL(`${BASE_PATH}/resources`, location.origin).href;
   const poll = setInterval(
     () =>
-      onProgress({
+      onProgress?.({
         available: renderer.renderer_available(),
         fraction: renderer.load_progress(),
         status: renderer.load_status(),
@@ -91,12 +178,72 @@ export async function startWorld(
     200,
   );
   try {
-    return await renderer.start(
-      canvas,
-      process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
-      resourcesBase,
-    );
+    return await start(renderer, resourcesBase);
   } finally {
     clearInterval(poll);
   }
+}
+
+export async function startWorld(
+  canvas: HTMLCanvasElement,
+  options: StartOptions = {},
+): Promise<WorldHandle> {
+  return startWith(options.onProgress, (renderer, resourcesBase) =>
+    renderer.start(
+      canvas,
+      process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
+      resourcesBase,
+      options.seed,
+      cameraArray(options.camera),
+    ),
+  );
+}
+
+export async function startReplayWorld(
+  canvas: HTMLCanvasElement,
+  replay: ReplayHandle,
+  options: StartOptions = {},
+): Promise<WorldHandle> {
+  return startWith(options.onProgress, (renderer, resourcesBase) =>
+    renderer.start_replay(
+      canvas,
+      process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
+      resourcesBase,
+      options.seed,
+      cameraArray(options.camera),
+      replay,
+    ),
+  );
+}
+
+export async function startSaveWorld(
+  canvas: HTMLCanvasElement,
+  save: SaveHandle,
+  options: StartOptions = {},
+): Promise<WorldHandle> {
+  return startWith(options.onProgress, (renderer, resourcesBase) =>
+    renderer.start_save(
+      canvas,
+      process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
+      resourcesBase,
+      cameraArray(options.camera),
+      save,
+    ),
+  );
+}
+
+/** Opens a replay file's bytes; throws with the parser's message. */
+export async function openReplay(bytes: Uint8Array): Promise<ReplayHandle> {
+  const renderer = await loadRenderer();
+  return renderer.open_replay(bytes);
+}
+
+/** Opens a world save zip's bytes; throws with the parser's message. */
+export async function openSave(bytes: Uint8Array): Promise<SaveHandle> {
+  const renderer = await loadRenderer();
+  return renderer.open_save(bytes);
+}
+
+export function parseEntities(json: string): EntityInfo[] {
+  return JSON.parse(json) as EntityInfo[];
 }
