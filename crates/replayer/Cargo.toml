@@ -1,0 +1,17 @@
+[package]
+name = "replayer"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["mcpr"]
+# The .mcpr container (a zip written by the ReplayMod) is the one
+# recording format implemented today. Without it the crate still
+# exposes the playback interface and reports Error::NoBackend, so the
+# capability can be switched off with --no-default-features.
+mcpr = ["dep:zip", "dep:serde", "dep:serde_json"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
