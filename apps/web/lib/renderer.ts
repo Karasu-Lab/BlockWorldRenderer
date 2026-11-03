@@ -36,8 +36,8 @@ export function hasWebGpu(): boolean {
 }
 
 /**
- * Loads the wasm package from `public/wasm`, where `scripts/fetch-wasm.mjs`
- * puts it, and starts the fixed world on `canvas`.
+ * Loads the wasm package from `public/wasm`, where `just web-wasm` places
+ * it, and starts the fixed world on `canvas`.
  */
 export async function startWorld(
   canvas: HTMLCanvasElement,
