@@ -1,0 +1,14 @@
+[package]
+name = "nbtparser"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = ["simdnbt"]
+# The community crate that does the parsing; the rest of the crate only
+# knows the interface in lib.rs, so the backend can be swapped or turned
+# off (parsing then reports Error::NoBackend).
+simdnbt = ["dep:simdnbt"]
+
+[dependencies]
+simdnbt = { version = "0.10", optional = true }
