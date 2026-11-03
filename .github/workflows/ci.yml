@@ -15,6 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The workspace patches point into the Client submodule, so every
+          # cargo command needs it checked out.
+          submodules: recursive
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
