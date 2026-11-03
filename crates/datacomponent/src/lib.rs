@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use bwr_registry::ResourceKey;
-use bwr_serializer::{SerializerError, Value};
+use registry::ResourceKey;
+use serializer::{SerializerError, Value};
 
 pub trait DataComponent: Into<Value> + TryFrom<Value, Error = SerializerError> {
     fn key() -> ResourceKey;

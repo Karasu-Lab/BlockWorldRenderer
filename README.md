@@ -29,7 +29,7 @@ git submodule update --init --recursive
 ## Crates
 
 The workspace root is the `block-world-renderer` WebAssembly entry point. The
-engine is split into API crates under `crates/`, prefixed `bwr-`:
+engine is split into API crates under `crates/`:
 
 | Crate | Responsibility |
 | --- | --- |
@@ -51,11 +51,11 @@ engine is split into API crates under `crates/`, prefixed `bwr-`:
 Each crate defines its own `thiserror` error enum with error codes; `anyhow` is
 not used.
 
-Enable crates on `bwr-core` through features; `full` enables all of them and
+Enable crates on `core` through features; `full` enables all of them and
 `downloader-cli` adds the downloader's command line:
 
 ```sh
-cargo build -p bwr-core --features renderer
+cargo build -p core --features renderer
 ```
 
 ## Build

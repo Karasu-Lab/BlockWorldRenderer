@@ -1,5 +1,5 @@
-use bwr_datacomponent::DataComponentMap;
-use bwr_registry::ResourceKey;
+use datacomponent::DataComponentMap;
+use registry::ResourceKey;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct EntityId(pub u64);

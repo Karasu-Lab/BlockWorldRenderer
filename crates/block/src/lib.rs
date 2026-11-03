@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use bwr_registry::ResourceKey;
+use registry::ResourceKey;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BlockState {

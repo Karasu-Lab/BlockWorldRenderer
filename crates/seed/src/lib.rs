@@ -1,4 +1,4 @@
-use bwr_random::RandomSource;
+use random::RandomSource;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct WorldSeed(pub i64);

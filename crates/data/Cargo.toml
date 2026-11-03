@@ -1,12 +1,12 @@
 [package]
-name = "bwr-data"
+name = "data"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-datacomponent = { version = "0.1.0", path = "../datacomponent" }
-bwr-registry = { version = "0.1.0", path = "../registry" }
-bwr-resourcepack = { version = "0.1.0", path = "../resourcepack" }
-bwr-serializer = { version = "0.1.0", path = "../serializer" }
-bwr-worldgen = { version = "0.1.0", path = "../worldgen" }
+datacomponent = { version = "0.1.0", path = "../datacomponent" }
+registry = { version = "0.1.0", path = "../registry" }
+resourcepack = { version = "0.1.0", path = "../resourcepack" }
+serializer = { version = "0.1.0", path = "../serializer" }
+worldgen = { version = "0.1.0", path = "../worldgen" }
 thiserror = "2.0.21"

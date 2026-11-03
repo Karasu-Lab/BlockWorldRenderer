@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use bwr_resourcepack::ResourcePackError;
-use bwr_serializer::{SerializerError, Value};
+use resourcepack::ResourcePackError;
+use serializer::{SerializerError, Value};
 use thiserror::Error;
 
 #[cfg(feature = "cli")]

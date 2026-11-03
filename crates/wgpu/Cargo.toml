@@ -1,0 +1,48 @@
+[package]
+name = "wgpu"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+# rustdoc links this crate and the crates.io `wgpu` under the same name.
+doctest = false
+
+[dependencies]
+block = { version = "0.1.0", path = "../block", optional = true }
+camera = { version = "0.1.0", path = "../camera", optional = true }
+debugger = { version = "0.1.0", path = "../debugger", optional = true }
+renderer = { version = "0.1.0", path = "../renderer", optional = true }
+resourcepack = { version = "0.1.0", path = "../resourcepack", optional = true }
+shader = { version = "0.1.0", path = "../shader", optional = true }
+bytemuck = { version = "1", optional = true }
+naga = { version = "30", optional = true, features = ["wgsl-in", "wgsl-out"] }
+raw-window-handle = { version = "0.6", optional = true }
+thiserror = "2.0.21"
+wgpu = { version = "30.0.1", optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+pollster = { version = "0.4", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = { version = "0.4", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["HtmlCanvasElement", "console"] }
+
+[features]
+default = []
+# The wgpu device layer and `WgpuRenderer`. Without it only the dependency-free
+# `rhi` descriptor types are built, which the Vulkan backend shares.
+backend = [
+    "dep:block",
+    "dep:camera",
+    "dep:debugger",
+    "dep:renderer",
+    "dep:resourcepack",
+    "dep:shader",
+    "dep:bytemuck",
+    "dep:naga",
+    "dep:pollster",
+    "dep:raw-window-handle",
+    "dep:wgpu",
+    "dep:wasm-bindgen-futures",
+    "dep:web-sys",
+]

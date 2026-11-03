@@ -1,11 +1,11 @@
 [package]
-name = "bwr-renderer"
+name = "renderer"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-block = { version = "0.1.0", path = "../block" }
-bwr-camera = { version = "0.1.0", path = "../camera" }
-bwr-resourcepack = { version = "0.1.0", path = "../resourcepack" }
-bwr-shader = { version = "0.1.0", path = "../shader" }
+block = { version = "0.1.0", path = "../block" }
+camera = { version = "0.1.0", path = "../camera" }
+resourcepack = { version = "0.1.0", path = "../resourcepack" }
+shader = { version = "0.1.0", path = "../shader" }
 thiserror = "2.0.21"
