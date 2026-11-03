@@ -42,3 +42,6 @@ next-env.d.ts
 
 # wasm package placed by `just web-wasm`
 /public/wasm/
+
+# game resources placed by `scripts/fetch-resources.mjs`
+/public/resources/

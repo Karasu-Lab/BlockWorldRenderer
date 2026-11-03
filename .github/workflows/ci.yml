@@ -75,6 +75,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The resource bundling below reads the game version from the
+          # Client submodule.
+          submodules: true
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -102,6 +106,12 @@ jobs:
           STATIC_EXPORT: "1"
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
         run: nix develop -c pnpm --dir apps/web run build
+
+      # Mojang's resource host sends no CORS headers, so the browser
+      # cannot download the resource objects at runtime; bundle them
+      # into the built site instead.
+      - name: Bundle the game resources into the site
+        run: nix develop -c node apps/web/scripts/fetch-resources.mjs apps/web/out
 
       # The built site, wasm included, is the whole content of the web
       # branch, which GitHub Pages serves.
