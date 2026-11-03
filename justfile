@@ -6,10 +6,15 @@
 wasm_rustflags := '--cfg getrandom_backend="wasm_js" --cfg tokio_unstable -C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--max-memory=1073741824 -C link-arg=--export=__wasm_init_tls -C link-arg=--export=__tls_size -C link-arg=--export=__tls_align -C link-arg=--export=__tls_base'
 
 # Builds the wasm package into pkg/ and places it in the web app at
-# apps/web/public/wasm, where the app loads it from.
+# apps/web/public/wasm, where the app loads it from. wasm-bindgen names
+# the binary block_world_renderer_bg.wasm; it is renamed to the plain
+# name and the glue's default URL patched to match.
 web-wasm:
     env RUSTFLAGS='{{wasm_rustflags}}' cargo build --release --target wasm32-unknown-unknown -Zbuild-std=std,panic_abort
     wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
+    mv pkg/block_world_renderer_bg.wasm pkg/block_world_renderer.wasm
+    mv pkg/block_world_renderer_bg.wasm.d.ts pkg/block_world_renderer.wasm.d.ts
+    sed -i 's/block_world_renderer_bg\.wasm/block_world_renderer.wasm/g' pkg/block_world_renderer.js
     rm -rf apps/web/public/wasm
     cp -r pkg apps/web/public/wasm
 
