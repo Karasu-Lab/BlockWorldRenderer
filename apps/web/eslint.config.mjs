@@ -12,7 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // The wasm package that scripts/sync-wasm.mjs copies in.
+    // The wasm package that scripts/fetch-wasm.mjs provides.
     "public/wasm/**",
   ]),
 ]);
