@@ -1,30 +1,44 @@
 //! A replay being played into the viewer.
 //!
-//! The recording's packets are applied to a [`ReplayState`] — the chunk
-//! bodies it sent and the entities it knows — which a [`WorldSource`]
-//! then serves to the viewer. The session owns the playhead: moving it
+//! The recording's packets are applied to a [`ReplayState`] — the
+//! chunks it sent, decoded into sections so block updates land on
+//! them, and the entities it knows — which a [`WorldSource`] then
+//! serves to the viewer. The session owns the playhead: moving it
 //! forward applies the packets in between, moving it backward clears
 //! the state and replays from the start.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use crate::chunkdata::{ChunkData, light_from_packet, sections_from_bytes, swap_biomes};
 use crate::entity::EntityInfo;
 use pomme_client::viewer::steel::SteelWorld;
 use pomme_client::viewer::{BiomeClimate, Dimension, Environment, WorldSource};
+use pomme_protocol::block::BlockPacket;
+use pomme_protocol::chunk::ChunkPacket;
+use pomme_protocol::codec::Reader;
 use pomme_protocol::packets::{Direction, PacketTable, Phase};
 use replayer::{Metadata, Replay};
 
 /// The world a recording describes so far.
 #[derive(Default)]
 pub struct ReplayState {
-    chunks: HashMap<(i32, i32), Vec<u8>>,
+    chunks: HashMap<(i32, i32), ChunkData>,
+    /// Chunk bodies that arrived before the column layout was known.
+    pending: HashMap<(i32, i32), Vec<u8>>,
+    /// The column layout (lowest block y, section count), known once
+    /// a world is serving the state.
+    layout: Option<(i32, usize)>,
     entities: HashMap<i32, EntityInfo>,
     /// Player UUIDs from the player-info packet, with their names.
     players: HashMap<String, Option<String>>,
     self_id: i32,
     chunk_id: Option<u32>,
     forget_chunk_id: Option<u32>,
+    light_update_id: Option<u32>,
+    chunks_biomes_id: Option<u32>,
+    block_update_id: Option<u32>,
+    section_blocks_update_id: Option<u32>,
     add_entity_id: Option<u32>,
     teleport_ids: HashMap<u32, TeleportKind>,
     move_pos_id: Option<u32>,
@@ -55,6 +69,10 @@ impl ReplayState {
         let id = |name: &str| table.id(Phase::Game, Direction::Clientbound, name);
         state.chunk_id = id("level_chunk_with_light");
         state.forget_chunk_id = id("forget_level_chunk");
+        state.light_update_id = id("light_update");
+        state.chunks_biomes_id = id("chunks_biomes");
+        state.block_update_id = id("block_update");
+        state.section_blocks_update_id = id("section_blocks_update");
         state.add_entity_id = id("add_entity");
         state.move_pos_id = id("move_entity_pos");
         state.move_pos_rot_id = id("move_entity_pos_rot");
@@ -75,8 +93,149 @@ impl ReplayState {
 
     fn reset(&mut self) {
         self.chunks.clear();
+        self.pending.clear();
         self.entities.clear();
         self.players.clear();
+    }
+
+    /// Tells the state the shape of the columns it is decoding, and
+    /// decodes any chunk bodies that arrived before it was known.
+    pub fn set_layout(&mut self, min_y: i32, height: u32) {
+        if self.layout.is_some() {
+            return;
+        }
+        self.layout = Some((min_y, (height / 16) as usize));
+        let pending = std::mem::take(&mut self.pending);
+        let mut decoded = Vec::new();
+        let mut undecodable = Vec::new();
+        for (pos, bytes) in pending {
+            match self.decode_chunk(&bytes) {
+                Some((decoded_pos, chunk)) => decoded.push((decoded_pos, chunk)),
+                None => undecodable.push((pos, bytes)),
+            }
+        }
+        for (pos, chunk) in decoded {
+            self.chunks.insert(pos, chunk);
+        }
+        for (pos, bytes) in undecodable {
+            self.pending.insert(pos, bytes);
+        }
+    }
+
+    /// Decodes one chunk packet body into a column, if the layout is
+    /// known and the body parses as the current chunk format.
+    fn decode_chunk(&self, bytes: &[u8]) -> Option<((i32, i32), ChunkData)> {
+        let (_, section_count) = self.layout?;
+        let mut reader = Reader::new(bytes);
+        let packet = pomme_protocol::chunk::read("level_chunk_with_light", &mut reader)?.ok()?;
+        let ChunkPacket::Level {
+            x,
+            z,
+            heightmaps,
+            sections,
+            light,
+            ..
+        } = packet
+        else {
+            return None;
+        };
+        let sections = sections_from_bytes(&sections, section_count).ok()?;
+        let (sky_light, block_light) = light_from_packet(&light, section_count);
+        Some((
+            (x, z),
+            ChunkData {
+                sections,
+                heightmaps,
+                sky_light,
+                block_light,
+            },
+        ))
+    }
+
+    fn apply_chunk_body(&mut self, bytes: &[u8]) {
+        if self.layout.is_none() {
+            let mut body = Body::new(bytes);
+            if let (Some(x), Some(z)) = (body.i32(), body.i32()) {
+                self.pending.insert((x, z), bytes.to_vec());
+            }
+            return;
+        }
+        if let Some((pos, chunk)) = self.decode_chunk(bytes) {
+            self.pending.remove(&pos);
+            self.chunks.insert(pos, chunk);
+        }
+    }
+
+    fn apply_forget(&mut self, bytes: &[u8]) {
+        let mut reader = Reader::new(bytes);
+        if let Some(Ok(ChunkPacket::Forget { x, z })) =
+            pomme_protocol::chunk::read("forget_level_chunk", &mut reader)
+        {
+            self.chunks.remove(&(x, z));
+            self.pending.remove(&(x, z));
+        }
+    }
+
+    fn apply_light(&mut self, bytes: &[u8]) {
+        let Some((_, section_count)) = self.layout else {
+            return;
+        };
+        let mut reader = Reader::new(bytes);
+        if let Some(Ok(ChunkPacket::Light { x, z, light })) =
+            pomme_protocol::chunk::read("light_update", &mut reader)
+        {
+            if let Some(chunk) = self.chunks.get_mut(&(x, z)) {
+                let (sky, block) = light_from_packet(&light, section_count);
+                chunk.sky_light = sky;
+                chunk.block_light = block;
+            }
+        }
+    }
+
+    fn apply_biomes(&mut self, bytes: &[u8]) {
+        let mut reader = Reader::new(bytes);
+        if let Some(Ok(ChunkPacket::Biomes(list))) =
+            pomme_protocol::chunk::read("chunks_biomes", &mut reader)
+        {
+            for entry in list {
+                if let Some(chunk) = self.chunks.get_mut(&(entry.x, entry.z)) {
+                    let _ = swap_biomes(&mut chunk.sections, &entry.data);
+                }
+            }
+        }
+    }
+
+    fn apply_block_update(&mut self, bytes: &[u8]) {
+        let Some((min_y, _)) = self.layout else {
+            return;
+        };
+        let mut reader = Reader::new(bytes);
+        if let Some(Ok(BlockPacket::Update { pos, state })) =
+            pomme_protocol::block::read("block_update", &mut reader)
+        {
+            self.set_block(min_y, pos, state);
+        }
+    }
+
+    fn apply_section_blocks_update(&mut self, bytes: &[u8]) {
+        let Some((min_y, _)) = self.layout else {
+            return;
+        };
+        let mut reader = Reader::new(bytes);
+        if let Some(Ok(BlockPacket::SectionUpdate { updates })) =
+            pomme_protocol::block::read("section_blocks_update", &mut reader)
+        {
+            for (pos, state) in updates {
+                self.set_block(min_y, pos, state);
+            }
+        }
+    }
+
+    fn set_block(&mut self, min_y: i32, pos: (i32, i32, i32), state: u32) {
+        let key = (pos.0.div_euclid(16), pos.2.div_euclid(16));
+        if let Some(chunk) = self.chunks.get_mut(&key) {
+            chunk.set_block(min_y, pos.0, pos.1, pos.2, state);
+        }
     }
 
     /// The entities currently known, players included.
@@ -118,16 +277,23 @@ impl ReplayState {
             return;
         };
         if Some(id) == self.chunk_id {
-            // The viewer decodes chunk bodies from the position on, so
-            // keep the whole body, not what follows it.
-            let whole_body = body.rest().to_vec();
-            if let (Some(x), Some(z)) = (body.i32(), body.i32()) {
-                self.chunks.insert((x, z), whole_body);
-            }
+            let bytes = body.rest();
+            self.apply_chunk_body(bytes);
         } else if Some(id) == self.forget_chunk_id {
-            if let (Some(x), Some(z)) = (body.i32(), body.i32()) {
-                self.chunks.remove(&(x, z));
-            }
+            let bytes = body.rest();
+            self.apply_forget(bytes);
+        } else if Some(id) == self.light_update_id {
+            let bytes = body.rest();
+            self.apply_light(bytes);
+        } else if Some(id) == self.chunks_biomes_id {
+            let bytes = body.rest();
+            self.apply_biomes(bytes);
+        } else if Some(id) == self.block_update_id {
+            let bytes = body.rest();
+            self.apply_block_update(bytes);
+        } else if Some(id) == self.section_blocks_update_id {
+            let bytes = body.rest();
+            self.apply_section_blocks_update(bytes);
         } else if Some(id) == self.add_entity_id {
             self.apply_add_entity(&mut body);
         } else if let Some(kind) = self.teleport_ids.get(&id).copied() {
@@ -442,6 +608,11 @@ pub struct ReplayWorld {
 
 impl ReplayWorld {
     pub fn new(base: SteelWorld, state: Arc<Mutex<ReplayState>>) -> Self {
+        let dimension = base.dimension();
+        state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .set_layout(dimension.min_y, dimension.height);
         Self { base, state }
     }
 }
@@ -469,7 +640,7 @@ impl WorldSource for ReplayWorld {
             .unwrap_or_else(PoisonError::into_inner)
             .chunks
             .get(&(x, z))
-            .cloned()
+            .map(|chunk| chunk.encode(x, z, self.base.dimension().has_skylight))
             .ok_or_else(|| "the replay has not sent this chunk".to_owned())
     }
 }

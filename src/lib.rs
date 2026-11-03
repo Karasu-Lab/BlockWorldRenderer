@@ -1,5 +1,7 @@
 pub use engine;
 
+#[cfg(all(target_arch = "wasm32", any(feature = "replay", feature = "save")))]
+mod chunkdata;
 #[cfg(target_arch = "wasm32")]
 mod entity;
 #[cfg(all(target_arch = "wasm32", feature = "replay"))]
