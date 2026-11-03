@@ -2,15 +2,20 @@ use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 
-use engine::settings::{ClientSettings, Settings};
+use engine::settings::{CameraSettings, ClientSettings, Settings};
 use js_sys::JsString;
 use pomme_client::viewer::assets::{self, Endpoints, Progress};
-use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, VERSION, install_thread_spawner};
+use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, install_thread_spawner};
 use pomme_client::viewer::web::{self, ViewerHandle};
-use pomme_client::viewer::{ViewerCamera, ViewerConfig};
+use pomme_client::viewer::{ViewerCamera, ViewerConfig, WorldSource};
 use tracing_subscriber::prelude::*;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
+
+#[cfg(feature = "replay")]
+use crate::replay::ReplaySession;
+#[cfg(feature = "save")]
+use crate::save::SaveData;
 
 static LOADING: Mutex<Progress> = Mutex::new(Progress {
     done: 0,
@@ -52,6 +57,15 @@ impl WorldHandle {
 
     pub fn set_ui_enabled(&self, enabled: bool) {
         self.viewer.set_ui_enabled(enabled);
+    }
+
+    /// Moves the camera to a position and look direction, in degrees.
+    pub fn set_camera(&self, x: f64, y: f64, z: f64, yaw_deg: f32, pitch_deg: f32) {
+        self.viewer.set_camera(ViewerCamera {
+            position: [x, y, z],
+            yaw_deg,
+            pitch_deg,
+        });
     }
 
     pub fn debug_lines(&self) -> Vec<String> {
@@ -105,12 +119,16 @@ fn init_logging() {
     });
 }
 
-#[wasm_bindgen]
-pub async fn start(
-    canvas: HtmlCanvasElement,
+/// The assets every viewer start needs, prepared once per start.
+struct Prepared {
+    client: ClientSettings,
+    dirs: assets::ViewerAssets,
+}
+
+async fn prepare(
     version_manifest: Option<String>,
     resources_base: Option<String>,
-) -> Result<WorldHandle, JsError> {
+) -> Result<Prepared, JsError> {
     init_logging();
     let settings = Settings {
         client: Some(ClientSettings::default()),
@@ -130,55 +148,204 @@ pub async fn start(
     if let Some(url) = resources_base {
         endpoints.resources_base = url;
     }
-    let assets = assets::prepare(
-        VERSION,
+    let dirs = assets::prepare(
+        pomme_client::viewer::steel::VERSION,
         endpoints,
         client.resource_pack_location.clone(),
         &|progress| *loading() = progress,
     )
     .await
     .map_err(failure)?;
+    Ok(Prepared { client, dirs })
+}
 
+/// Opens the generated world the registry data (and the seed view)
+/// comes from, on its own thread as the world builder requires.
+async fn open_generated_world(seed: i64) -> Result<SteelWorld, JsError> {
     enable_steel_workers(
         MAIN_JS.with(Clone::clone),
         wasm_bindgen::module(),
         wasm_bindgen::memory(),
     );
     install_thread_spawner(spawn_steel_worker);
-    let seed = settings.world.seed.0;
     let (sender, receiver) = futures_channel::oneshot::channel();
     engine::thread::spawn("world-open", move || {
         let _ = sender.send(SteelWorld::open(seed, None));
     })
     .map_err(failure)?;
+    receiver.await.map_err(failure)?.map_err(failure)
+}
+
+/// Starts the viewer on `source` once the render assets are warm.
+async fn start_viewer(
+    canvas: HtmlCanvasElement,
+    prepared: Prepared,
+    camera: ViewerCamera,
+    source: Arc<dyn WorldSource>,
+) -> Result<WorldHandle, JsError> {
     let (preloaded_sender, preloaded) = futures_channel::oneshot::channel();
     {
-        let dirs = assets.dirs.clone();
-        let asset_index = assets.asset_index.clone();
+        let dirs = prepared.dirs.dirs.clone();
+        let asset_index = prepared.dirs.asset_index.clone();
         engine::thread::spawn("render-assets", move || {
             pomme_client::viewer::preload_render_assets(&dirs, &asset_index);
             let _ = preloaded_sender.send(());
         })
         .map_err(failure)?;
     }
-    let world = receiver.await.map_err(failure)?.map_err(failure)?;
     preloaded.await.map_err(failure)?;
 
-    let camera = settings.camera;
+    let client = prepared.client;
     let config = ViewerConfig {
-        camera: ViewerCamera {
-            position: camera.position.map(f64::from),
-            yaw_deg: camera.yaw.to_degrees(),
-            pitch_deg: -camera.pitch.to_degrees(),
-        },
+        camera,
         render_distance: client.render_distance,
-        dirs: assets.dirs,
-        asset_index: assets.asset_index,
+        dirs: prepared.dirs.dirs,
+        asset_index: prepared.dirs.asset_index,
         vsync: client.vsync,
         ui_enabled: client.ui_enabled,
         protocol: PROTOCOL,
-        resource_pack_location: assets.resource_pack_location,
+        resource_pack_location: prepared.dirs.resource_pack_location,
     };
-    let viewer = web::start(canvas, config, Arc::new(world)).map_err(failure)?;
+    let viewer = web::start(canvas, config, source).map_err(failure)?;
     Ok(WorldHandle { viewer })
+}
+
+/// The camera a start uses: the caller's `[x, y, z, yaw degrees, pitch
+/// degrees]` when given, else the settings default.
+fn viewer_camera(given: Option<Vec<f64>>) -> ViewerCamera {
+    if let Some([x, y, z, yaw, pitch]) = given.as_deref() {
+        return ViewerCamera {
+            position: [*x, *y, *z],
+            yaw_deg: *yaw as f32,
+            pitch_deg: *pitch as f32,
+        };
+    }
+    let camera = CameraSettings::default();
+    ViewerCamera {
+        position: camera.position.map(f64::from),
+        yaw_deg: camera.yaw.to_degrees(),
+        pitch_deg: -camera.pitch.to_degrees(),
+    }
+}
+
+fn default_seed() -> i64 {
+    Settings::default().world.seed.0
+}
+
+#[wasm_bindgen]
+pub async fn start(
+    canvas: HtmlCanvasElement,
+    version_manifest: Option<String>,
+    resources_base: Option<String>,
+    seed: Option<i64>,
+    camera: Option<Vec<f64>>,
+) -> Result<WorldHandle, JsError> {
+    let prepared = prepare(version_manifest, resources_base).await?;
+    let world = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
+    start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
+}
+
+/// An opened replay file, played through [`start_replay`].
+#[cfg(feature = "replay")]
+#[wasm_bindgen]
+pub struct ReplayHandle {
+    session: ReplaySession,
+}
+
+#[cfg(feature = "replay")]
+#[wasm_bindgen]
+pub fn open_replay(bytes: &[u8]) -> Result<ReplayHandle, JsError> {
+    Ok(ReplayHandle {
+        session: ReplaySession::open(bytes).map_err(failure)?,
+    })
+}
+
+#[cfg(feature = "replay")]
+#[wasm_bindgen]
+impl ReplayHandle {
+    pub fn duration_ms(&self) -> u32 {
+        self.session.metadata().duration_ms
+    }
+
+    pub fn position_ms(&self) -> u32 {
+        self.session.position_ms()
+    }
+
+    pub fn mc_version(&self) -> String {
+        self.session.metadata().mc_version.clone()
+    }
+
+    pub fn protocol(&self) -> Option<i32> {
+        self.session.metadata().protocol
+    }
+
+    /// Moves the playhead; packets in between are applied to the world
+    /// the viewer reads, backward moves replay from the start.
+    pub fn apply_until(&mut self, target_ms: u32) {
+        self.session.apply_until(target_ms);
+    }
+
+    /// The entities the recording has shown so far, as JSON.
+    pub fn entities_json(&self) -> String {
+        crate::entity::entities_json(&self.session.entities())
+    }
+}
+
+#[cfg(feature = "replay")]
+#[wasm_bindgen]
+pub async fn start_replay(
+    canvas: HtmlCanvasElement,
+    version_manifest: Option<String>,
+    resources_base: Option<String>,
+    seed: Option<i64>,
+    camera: Option<Vec<f64>>,
+    replay: &ReplayHandle,
+) -> Result<WorldHandle, JsError> {
+    let prepared = prepare(version_manifest, resources_base).await?;
+    let base = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
+    let world = crate::replay::ReplayWorld::new(base, replay.session.state());
+    start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
+}
+
+/// An opened world save, shown through [`start_save`].
+#[cfg(feature = "save")]
+#[wasm_bindgen]
+pub struct SaveHandle {
+    data: SaveData,
+}
+
+#[cfg(feature = "save")]
+#[wasm_bindgen]
+pub fn open_save(bytes: &[u8]) -> Result<SaveHandle, JsError> {
+    Ok(SaveHandle {
+        data: SaveData::open(bytes).map_err(failure)?,
+    })
+}
+
+#[cfg(feature = "save")]
+#[wasm_bindgen]
+impl SaveHandle {
+    pub fn seed(&self) -> i64 {
+        self.data.seed
+    }
+
+    /// The save's players, as JSON.
+    pub fn players_json(&self) -> String {
+        crate::entity::entities_json(&self.data.players)
+    }
+}
+
+#[cfg(feature = "save")]
+#[wasm_bindgen]
+pub async fn start_save(
+    canvas: HtmlCanvasElement,
+    version_manifest: Option<String>,
+    resources_base: Option<String>,
+    camera: Option<Vec<f64>>,
+    save: SaveHandle,
+) -> Result<WorldHandle, JsError> {
+    let prepared = prepare(version_manifest, resources_base).await?;
+    let base = open_generated_world(save.data.seed).await?;
+    let world = save.data.world(base);
+    start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
 }

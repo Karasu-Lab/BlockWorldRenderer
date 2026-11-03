@@ -759,15 +759,20 @@ name = "block-world-renderer"
 version = "0.1.0"
 dependencies = [
  "core",
+ "flate2",
  "futures-channel",
  "js-sys",
+ "nbtparser",
  "pomme-client",
+ "pomme-protocol",
+ "replayer",
  "tracing",
  "tracing-subscriber",
  "tracing-web",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "zip 2.6.1",
 ]
 
 [[package]]
