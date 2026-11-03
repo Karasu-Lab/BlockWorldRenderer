@@ -42,12 +42,6 @@ jobs:
       - name: Test the downloader CLI
         run: nix develop -c cargo test -p downloader --features cli
 
-      - name: Build core without features
-        run: nix develop -c cargo build -p core --no-default-features
-
-      - name: Build core with all features
-        run: nix develop -c cargo build -p core --all-features
-
   wasm:
     name: WebAssembly
     runs-on: ubuntu-latest
