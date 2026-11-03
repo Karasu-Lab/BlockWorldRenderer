@@ -13,8 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["replay", "save"]
-replay = ["dep:replayer", "dep:pomme-protocol"]
-save = ["dep:nbtparser", "dep:zip", "dep:flate2"]
+replay = ["dep:replayer", "dep:pomme-protocol", "dep:steel-protocol", "dep:steel-registry", "dep:steel-utils"]
+save = ["dep:nbtparser", "dep:zip", "dep:flate2", "dep:pomme-protocol", "dep:steel-protocol", "dep:steel-registry", "dep:steel-utils"]
 
 [dependencies]
 engine = { package = "core", version = "0.1.0", path = "crates/core", features = ["canvas", "debugger", "renderer", "resourcepack", "settings", "shader", "thread", "ui", "wgpu", "worldgen"] }
@@ -31,6 +31,9 @@ futures-channel = "0.3.34"
 nbtparser = { path = "crates/nbtparser", optional = true }
 pomme-protocol = { path = "third_party/Client/pomme-protocol", optional = true }
 replayer = { path = "crates/replayer", optional = true }
+steel-protocol = { path = "third_party/Client/third_party/SteelMC/steel-protocol", optional = true }
+steel-registry = { path = "third_party/Client/third_party/SteelMC/steel-registry", optional = true }
+steel-utils = { path = "third_party/Client/third_party/SteelMC/steel-utils", optional = true }
 zip = { version = "2", default-features = false, features = ["deflate"], optional = true }
 js-sys = "0.3.106"
 pomme-client = { path = "third_party/Client/pomme-client", default-features = false, features = ["wgpu", "steel-world"] }
