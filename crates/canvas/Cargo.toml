@@ -1,0 +1,33 @@
+[package]
+name = "canvas"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+block = { version = "0.1.0", path = "../block" }
+camera = { version = "0.1.0", path = "../camera" }
+debugger = { version = "0.1.0", path = "../debugger" }
+renderer = { version = "0.1.0", path = "../renderer" }
+seed = { version = "0.1.0", path = "../seed" }
+settings = { version = "0.1.0", path = "../settings" }
+thread = { version = "0.1.0", path = "../thread" }
+ui = { version = "0.1.0", path = "../ui" }
+worldgen = { version = "0.1.0", path = "../worldgen" }
+thiserror = "2.0.21"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+wasm-bindgen = "=0.2.129"
+wasm-bindgen-futures = "0.4"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3"
+features = [
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "Navigator",
+    "console",
+    "KeyboardEvent",
+    "Window",
+]

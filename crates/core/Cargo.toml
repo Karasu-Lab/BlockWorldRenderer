@@ -1,41 +1,57 @@
 [package]
-name = "bwr-core"
+name = "core"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+# The package keeps the name `core`, but a library of that name clashes with
+# the standard library's when it is built with `-Zbuild-std` for wasm32.
+name = "engine"
+
 [dependencies]
-bwr-block = { version = "0.1.0", path = "../block", optional = true }
-bwr-camera = { version = "0.1.0", path = "../camera", optional = true }
-bwr-data = { version = "0.1.0", path = "../data", optional = true }
-bwr-datacomponent = { version = "0.1.0", path = "../datacomponent", optional = true }
-bwr-downloader = { version = "0.1.0", path = "../downloader", optional = true }
-bwr-entity = { version = "0.1.0", path = "../entity", optional = true }
-bwr-item = { version = "0.1.0", path = "../item", optional = true }
-bwr-network = { version = "0.1.0", path = "../network", optional = true }
-bwr-random = { version = "0.1.0", path = "../random", optional = true }
-bwr-registry = { version = "0.1.0", path = "../registry", optional = true }
-bwr-renderer = { version = "0.1.0", path = "../renderer", optional = true }
-bwr-resourcepack = { version = "0.1.0", path = "../resourcepack", optional = true }
-bwr-seed = { version = "0.1.0", path = "../seed", optional = true }
-bwr-serializer = { version = "0.1.0", path = "../serializer", optional = true }
-bwr-server = { version = "0.1.0", path = "../server", optional = true }
-bwr-shader = { version = "0.1.0", path = "../shader", optional = true }
-bwr-storage = { version = "0.1.0", path = "../storage", optional = true }
-bwr-utils = { version = "0.1.0", path = "../utils", optional = true }
-bwr-worldgen = { version = "0.1.0", path = "../worldgen", optional = true }
-bwr-worldtick = { version = "0.1.0", path = "../worldtick", optional = true }
+block ={ version = "0.1.0", path = "../block", optional = true }
+camera = { version = "0.1.0", path = "../camera", optional = true }
+canvas = { version = "0.1.0", path = "../canvas", optional = true }
+data = { version = "0.1.0", path = "../data", optional = true }
+datacomponent = { version = "0.1.0", path = "../datacomponent", optional = true }
+debugger = { version = "0.1.0", path = "../debugger", optional = true }
+downloader = { version = "0.1.0", path = "../downloader", optional = true }
+entity = { version = "0.1.0", path = "../entity", optional = true }
+item = { version = "0.1.0", path = "../item", optional = true }
+network = { version = "0.1.0", path = "../network", optional = true }
+particle = { version = "0.1.0", path = "../particle", optional = true }
+random = { version = "0.1.0", path = "../random", optional = true }
+registry = { version = "0.1.0", path = "../registry", optional = true }
+renderer = { version = "0.1.0", path = "../renderer", optional = true }
+resourcepack = { version = "0.1.0", path = "../resourcepack", optional = true }
+seed = { version = "0.1.0", path = "../seed", optional = true }
+serializer = { version = "0.1.0", path = "../serializer", optional = true }
+server = { version = "0.1.0", path = "../server", optional = true }
+settings = { version = "0.1.0", path = "../settings", optional = true }
+shader = { version = "0.1.0", path = "../shader", optional = true }
+storage = { version = "0.1.0", path = "../storage", optional = true }
+thread = { version = "0.1.0", path = "../thread", optional = true }
+tick = { version = "0.1.0", path = "../tick", optional = true }
+ui = { version = "0.1.0", path = "../ui", optional = true }
+utils = { version = "0.1.0", path = "../utils", optional = true }
+wgpu = { version = "0.1.0", path = "../wgpu", optional = true }
+worldgen = { version = "0.1.0", path = "../worldgen", optional = true }
+worldtick = { version = "0.1.0", path = "../worldtick", optional = true }
 
 [features]
 default = []
 full = [
     "block",
     "camera",
+    "canvas",
     "data",
     "datacomponent",
+    "debugger",
     "downloader",
     "entity",
     "item",
     "network",
+    "particle",
     "random",
     "registry",
     "renderer",
@@ -43,30 +59,43 @@ full = [
     "seed",
     "serializer",
     "server",
+    "settings",
     "shader",
     "storage",
+    "thread",
+    "tick",
+    "ui",
     "utils",
+    "wgpu",
     "worldgen",
     "worldtick",
 ]
-block = ["dep:bwr-block", "registry"]
-camera = ["dep:bwr-camera"]
-data = ["dep:bwr-data", "datacomponent", "registry", "serializer", "resourcepack", "worldgen"]
-datacomponent = ["dep:bwr-datacomponent", "registry", "serializer"]
-downloader = ["dep:bwr-downloader", "resourcepack", "serializer"]
-downloader-cli = ["downloader", "bwr-downloader/cli"]
-entity = ["dep:bwr-entity", "registry", "datacomponent"]
-item = ["dep:bwr-item", "registry", "datacomponent"]
-network = ["dep:bwr-network", "serializer"]
-random = ["dep:bwr-random"]
-registry = ["dep:bwr-registry"]
-renderer = ["dep:bwr-renderer", "camera", "shader", "resourcepack", "block"]
-resourcepack = ["dep:bwr-resourcepack", "registry", "serializer"]
-seed = ["dep:bwr-seed", "random"]
-serializer = ["dep:bwr-serializer"]
-server = ["dep:bwr-server", "network", "worldtick", "worldgen", "storage", "entity", "registry"]
-shader = ["dep:bwr-shader", "resourcepack"]
-storage = ["dep:bwr-storage", "registry", "serializer"]
-utils = ["dep:bwr-utils"]
-worldgen = ["dep:bwr-worldgen", "seed", "random", "block", "registry"]
-worldtick = ["dep:bwr-worldtick", "entity"]
+block = ["dep:block", "registry"]
+camera = ["dep:camera"]
+canvas = ["dep:canvas", "block", "camera", "debugger", "renderer", "seed", "settings", "ui", "worldgen"]
+data = ["dep:data", "datacomponent", "registry", "serializer", "resourcepack", "worldgen"]
+datacomponent = ["dep:datacomponent", "registry", "serializer"]
+debugger = ["dep:debugger", "ui"]
+downloader = ["dep:downloader", "resourcepack", "serializer"]
+downloader-cli = ["downloader", "downloader/cli"]
+entity = ["dep:entity", "registry", "datacomponent"]
+item = ["dep:item", "registry", "datacomponent"]
+network = ["dep:network", "serializer"]
+particle = ["dep:particle", "camera", "tick"]
+random = ["dep:random"]
+registry = ["dep:registry"]
+renderer = ["dep:renderer", "camera", "shader", "resourcepack", "block"]
+resourcepack = ["dep:resourcepack", "registry", "serializer"]
+seed = ["dep:seed", "random"]
+serializer = ["dep:serializer"]
+server = ["dep:server", "network", "worldtick", "worldgen", "storage", "entity", "registry"]
+settings = ["dep:settings", "camera", "resourcepack", "seed", "utils"]
+shader = ["dep:shader", "resourcepack"]
+storage = ["dep:storage", "registry", "serializer"]
+thread = ["dep:thread"]
+tick = ["dep:tick", "utils"]
+ui = ["dep:ui"]
+utils = ["dep:utils"]
+wgpu = ["dep:wgpu", "wgpu/backend", "block", "camera", "debugger", "renderer", "resourcepack", "shader"]
+worldgen = ["dep:worldgen", "seed", "random", "block", "registry"]
+worldtick = ["dep:worldtick", "entity", "tick"]

@@ -1,9 +1,9 @@
-use bwr_datacomponent::DataComponentMap;
-use bwr_registry::ResourceKey;
-use bwr_resourcepack::ResourcePackError;
-use bwr_serializer::{SerializerError, Value};
-use bwr_worldgen::{ChunkGenerator, WorldgenError};
+use datacomponent::DataComponentMap;
+use registry::ResourceKey;
+use resourcepack::ResourcePackError;
+use serializer::{SerializerError, Value};
 use thiserror::Error;
+use worldgen::{ChunkGenerator, WorldgenError};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum DataError {

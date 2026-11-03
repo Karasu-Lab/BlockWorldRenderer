@@ -1,4 +1,4 @@
-use bwr_serializer::{SerializerError, Value};
+use serializer::{SerializerError, Value};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

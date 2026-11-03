@@ -1,8 +1,8 @@
 [package]
-name = "bwr-shader"
+name = "shader"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-resourcepack = { version = "0.1.0", path = "../resourcepack" }
+resourcepack = { version = "0.1.0", path = "../resourcepack" }
 thiserror = "2.0.21"

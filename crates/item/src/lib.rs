@@ -1,5 +1,5 @@
-use bwr_datacomponent::DataComponentPatch;
-use bwr_registry::ResourceKey;
+use datacomponent::DataComponentPatch;
+use registry::ResourceKey;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ItemStack {

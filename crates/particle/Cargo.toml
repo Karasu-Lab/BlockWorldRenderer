@@ -1,0 +1,9 @@
+[package]
+name = "particle"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+camera = { version = "0.1.0", path = "../camera" }
+tick = { version = "0.1.0", path = "../tick" }
+thiserror = "2.0.21"

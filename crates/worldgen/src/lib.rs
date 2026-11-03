@@ -1,8 +1,13 @@
-use bwr_block::{BlockSetter, BlockState};
-use bwr_random::RandomSource;
-use bwr_registry::ResourceKey;
-use bwr_seed::WorldSeed;
+use block::{BlockSetter, BlockState};
+use random::RandomSource;
+use registry::ResourceKey;
+use seed::WorldSeed;
 use thiserror::Error;
+
+#[cfg(feature = "steel")]
+mod steel;
+#[cfg(feature = "steel")]
+pub use steel::{SteelChunkGenerator, ThreadSpawner, install_thread_spawner};
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum WorldgenError {

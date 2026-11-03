@@ -1,5 +1,5 @@
-use bwr_registry::ResourceKey;
-use bwr_serializer::Value;
+use registry::ResourceKey;
+use serializer::Value;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]

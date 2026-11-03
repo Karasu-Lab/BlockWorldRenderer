@@ -5,16 +5,21 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  build:
-    name: Test and build WebAssembly
+  rust:
+    name: Rust
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The workspace patches point into the Client submodule, so every
+          # cargo command needs it checked out.
+          submodules: recursive
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -29,29 +34,87 @@ jobs:
         run: nix develop -c cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Lint the downloader CLI
-        run: nix develop -c cargo clippy -p bwr-downloader --all-targets --features cli -- -D warnings
+        run: nix develop -c cargo clippy -p downloader --all-targets --features cli -- -D warnings
 
       - name: Test
         run: nix develop -c cargo test --workspace
 
       - name: Test the downloader CLI
-        run: nix develop -c cargo test -p bwr-downloader --features cli
+        run: nix develop -c cargo test -p downloader --features cli
 
-      - name: Build core without features
-        run: nix develop -c cargo build -p bwr-core --no-default-features
+  wasm:
+    name: WebAssembly
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Build core with all features
-        run: nix develop -c cargo build -p bwr-core --all-features
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
 
-      - name: Build for wasm32-unknown-unknown
-        run: nix develop -c cargo build --release --target wasm32-unknown-unknown
+      # Builds the package and places it in apps/web/public/wasm.
+      - name: Build the WebAssembly package
+        run: nix develop -c just web-wasm
 
-      - name: Generate JavaScript bindings
-        run: nix develop -c wasm-bindgen --target web --out-dir pkg target/wasm32-unknown-unknown/release/block_world_renderer.wasm
-
-      - name: Upload WebAssembly package
+      - name: Upload the placed WebAssembly package
         uses: actions/upload-artifact@v4
         with:
           name: block-world-renderer-wasm
-          path: pkg/
+          path: apps/web/public/wasm/
           if-no-files-found: error
+
+  web:
+    name: Web app
+    needs: wasm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Place the WebAssembly package in the web app
+        uses: actions/download-artifact@v4
+        with:
+          name: block-world-renderer-wasm
+          path: apps/web/public/wasm
+
+      - name: Install web dependencies
+        run: nix develop -c pnpm --dir apps/web install --frozen-lockfile
+
+      - name: Lint the web app
+        run: nix develop -c pnpm --dir apps/web run lint
+
+      - name: Type-check the web app
+        run: nix develop -c pnpm --dir apps/web run typecheck
+
+      - name: Build the web app
+        env:
+          STATIC_EXPORT: "1"
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+        run: nix develop -c pnpm --dir apps/web run build
+
+      # The built site, wasm included, is the whole content of the web
+      # branch, which GitHub Pages serves.
+      - name: Push the built site to the web branch
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          PUSH_URL: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        run: |
+          cd apps/web/out
+          touch .nojekyll
+          git init -b web
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --all
+          git commit -m "Built from ${GITHUB_SHA}"
+          git push --force "${PUSH_URL}" web

@@ -1,7 +1,7 @@
-use bwr_block::BlockGetter;
-use bwr_camera::Camera;
-use bwr_resourcepack::{ResourcePackError, ResourceProvider};
-use bwr_shader::{ShaderError, ShaderProgram};
+use block::BlockGetter;
+use camera::Camera;
+use resourcepack::{ResourcePackError, ResourceProvider};
+use shader::{ShaderError, ShaderProgram};
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

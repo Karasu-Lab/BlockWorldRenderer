@@ -1,7 +1,8 @@
 [package]
-name = "bwr-worldtick"
+name = "worldtick"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bwr-entity = { version = "0.1.0", path = "../entity" }
+entity = { version = "0.1.0", path = "../entity" }
+tick = { version = "0.1.0", path = "../tick" }

@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{Downloader, DownloaderError, PackInstaller};
 
-const BIN_NAME: &str = "bwr-downloader";
+const BIN_NAME: &str = "downloader";
 
 #[derive(Debug, Parser)]
 #[command(name = BIN_NAME, about = "Fetch and apply Mojang resource packs")]

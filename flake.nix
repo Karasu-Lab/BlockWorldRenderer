@@ -71,6 +71,8 @@
                 pkgs.cmake
                 pkgs.ninja
                 pkgs.python3
+                pkgs.nodejs
+                pkgs.pnpm
                 pkgs.vulkan-headers
               ]
               ++ nativeLibs;

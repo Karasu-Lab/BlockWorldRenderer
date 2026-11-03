@@ -1,3 +1,5 @@
+pub mod side;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Default)]
 pub struct BlockPos {
     pub x: i32,
