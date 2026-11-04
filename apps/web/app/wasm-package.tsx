@@ -69,27 +69,37 @@ export function ensureWasmPackage(): Promise<void> {
       if (await cache.match(packageUrl(WASM_FILE))) return;
       throw new Error("the wasm package is not cached and cannot be downloaded");
     }
-    const glue = await download(GLUE_FILE);
-    const glueText = new TextDecoder().decode(glue);
-    const snippets = [
-      ...glueText.matchAll(/["'](\.\/snippets\/[^"']+)["']/g),
-    ].map((match) => match[1].replace(/^\.\//, ""));
-    const wasm = await download(WASM_FILE);
-    if ((await sha256(wasm)) !== checksum) {
-      throw new Error("the downloaded wasm does not match the release checksum");
+    try {
+      const glue = await download(GLUE_FILE);
+      const glueText = new TextDecoder().decode(glue);
+      const snippets = [
+        ...glueText.matchAll(/["'](\.\/snippets\/[^"']+)["']/g),
+      ].map((match) => match[1].replace(/^\.\//, ""));
+      const wasm = await download(WASM_FILE);
+      if ((await sha256(wasm)) !== checksum) {
+        throw new Error(
+          "the downloaded wasm does not match the release checksum",
+        );
+      }
+      const put = (path: string, bytes: ArrayBuffer, type: string) =>
+        cache.put(
+          packageUrl(path),
+          new Response(bytes, { headers: { "Content-Type": type } }),
+        );
+      await put(GLUE_FILE, glue, "text/javascript");
+      await put(WASM_FILE, wasm, "application/wasm");
+      for (const snippet of snippets) {
+        const name = snippet.split("/").pop() ?? snippet;
+        await put(snippet, await download(name), "text/javascript");
+      }
+      localStorage.setItem(CHECKSUM_KEY, checksum);
+    } catch (error) {
+      // A release whose files cannot be used — one that predates the
+      // individual files, for example — must not break a cached
+      // package that works: keep serving the cache.
+      if (await cache.match(packageUrl(WASM_FILE))) return;
+      throw error;
     }
-    const put = (path: string, bytes: ArrayBuffer, type: string) =>
-      cache.put(
-        packageUrl(path),
-        new Response(bytes, { headers: { "Content-Type": type } }),
-      );
-    await put(GLUE_FILE, glue, "text/javascript");
-    await put(WASM_FILE, wasm, "application/wasm");
-    for (const snippet of snippets) {
-      const name = snippet.split("/").pop() ?? snippet;
-      await put(snippet, await download(name), "text/javascript");
-    }
-    localStorage.setItem(CHECKSUM_KEY, checksum);
   })().catch((error: unknown) => {
     ready = undefined;
     throw error;
