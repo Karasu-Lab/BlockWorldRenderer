@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 
 use engine::settings::{CameraSettings, ClientSettings, Settings};
 use js_sys::JsString;
-use pomme_client::viewer::assets::{self, Endpoints, HttpTransfer, Progress};
+use pomme_client::viewer::assets::{self, Endpoints, HttpTransfer, Progress, Stage};
 use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, VERSION, install_thread_spawner};
 use pomme_client::viewer::web::{self, ViewerHandle};
 use pomme_client::viewer::{ViewerCamera, ViewerConfig, WorldSource};
@@ -19,6 +19,7 @@ use crate::replay::ReplaySession;
 use crate::save::SaveData;
 
 static LOADING: Mutex<Progress> = Mutex::new(Progress {
+    stage: Stage::Info,
     done: 0,
     total: 0,
     status: String::new(),
@@ -178,7 +179,7 @@ async fn prepare(
     let location = client.resource_pack_location.clone();
     let dirs = match notifier {
         Some(notifier) => {
-            notify::listen(notifier.clone());
+            notify::listen(notifier.clone().unchecked_into::<DownloadNotifier>());
             let transfer = NotifyTransfer::new(notifier, assets::ASSETS_NAMESPACE);
             assets::prepare_with(&transfer, version, endpoints, location, &report).await
         }

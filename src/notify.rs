@@ -65,7 +65,7 @@ fn failure(error: JsValue) -> String {
         .unwrap_or_else(|| format!("{error:?}"))
 }
 
-fn descriptor(file: &Fetch) -> Result<Object, String> {
+fn descriptor(file: &Fetch) -> Result<JsValue, String> {
     let object = Object::new();
     let set = |name: &str, value: JsValue| {
         Reflect::set(&object, &JsValue::from_str(name), &value)
@@ -79,7 +79,7 @@ fn descriptor(file: &Fetch) -> Result<Object, String> {
     )?;
     set("size", JsValue::from_f64(file.size as f64))?;
     set("expected", JsValue::from_str(&file.expected))?;
-    Ok(object)
+    Ok(object.into())
 }
 
 pub struct NotifyTransfer {
