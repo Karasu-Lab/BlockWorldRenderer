@@ -41,6 +41,7 @@ engine is split into API crates under `crates/`:
 | `data` | Data-driven commands, resource pack resolution and world generation |
 | `block`, `item`, `entity` | Blocks, items and entities |
 | `storage` | Chunk and world storage |
+| `cache` | Cache names and keys, and the page requests that load and save them in the browser |
 | `resourcepack`, `shader` | Resource packs and shader programs |
 | `downloader` | Fetching and applying Mojang resource packs, with an optional `cli` feature |
 | `camera`, `renderer` | Camera and rendering |

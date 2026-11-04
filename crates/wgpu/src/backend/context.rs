@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+use super::profile::RendererProfile;
 use super::registry::Key;
 use super::resource::{Texture, TextureEntry, TextureHandle, lock};
 use super::{CommandEncoder, ContextError, Device, Error, RenderPassDesc, Shared};
@@ -32,9 +33,10 @@ async fn open_device(
     surface: Option<&wgpu::Surface<'static>>,
     immediates: bool,
 ) -> Result<(wgpu::Adapter, Arc<Shared>), ContextError> {
+    let profile = RendererProfile::detect();
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
+            power_preference: profile.power_preference(),
             force_fallback_adapter: false,
             compatible_surface: surface,
             ..Default::default()
@@ -42,7 +44,7 @@ async fn open_device(
         .await
         .map_err(|error| ContextError::NoSuitableGpu(error.to_string()))?;
 
-    let features = adapter.features() & optional_features();
+    let features = adapter.features() & profile.optional_features();
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: Some("pomme"),
@@ -107,6 +109,9 @@ impl Device {
 
 #[cfg(target_arch = "wasm32")]
 pub async fn browser_supported() -> bool {
+    if RendererProfile::detect().forces_webgl2() {
+        return browser_has_webgl2();
+    }
     browser_has_webgpu_adapter().await || browser_has_webgl2()
 }
 
@@ -142,16 +147,6 @@ async fn browser_has_webgpu_adapter() -> bool {
     adapter.is_some_and(|adapter| !adapter.is_null() && !adapter.is_undefined())
 }
 
-fn optional_features() -> wgpu::Features {
-    wgpu::Features::INDIRECT_FIRST_INSTANCE
-        | wgpu::Features::IMMEDIATES
-        | wgpu::Features::DEPTH_CLIP_CONTROL
-        | wgpu::Features::FLOAT32_BLENDABLE
-        | wgpu::Features::FLOAT32_FILTERABLE
-        | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM
-        | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
-}
-
 impl Context {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn new<W: HasWindowHandle + HasDisplayHandle>(window: &W) -> Result<Self, ContextError> {
@@ -179,7 +174,7 @@ impl Context {
         #[cfg_attr(not(target_arch = "wasm32"), allow(unused_mut))]
         let mut descriptor = wgpu::InstanceDescriptor::new_without_display_handle();
         #[cfg(target_arch = "wasm32")]
-        if !browser_has_webgpu_adapter().await {
+        if RendererProfile::detect().forces_webgl2() || !browser_has_webgpu_adapter().await {
             descriptor.backends = wgpu::Backends::GL;
         }
         wgpu::Instance::new(descriptor)

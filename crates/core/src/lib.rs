@@ -1,5 +1,7 @@
 #[cfg(feature = "block")]
 pub use block;
+#[cfg(feature = "cache")]
+pub use cache;
 #[cfg(feature = "camera")]
 pub use camera;
 #[cfg(feature = "canvas")]

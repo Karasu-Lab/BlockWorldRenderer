@@ -9,6 +9,8 @@ import {
 } from "react";
 import { AssetDownloader } from "@/lib/asset-downloader";
 import { DownloaderConfig } from "@/lib/downloader-config";
+import { PageCache } from "@/lib/page-cache";
+import { ServiceWorkerGate } from "@/lib/service-worker";
 import { WasmPackageDownloader } from "@/lib/wasm-package";
 
 export interface DownloadProgress {
@@ -89,8 +91,10 @@ export class Notifier {
 export interface Downloader {
   notifier: Notifier;
   config: DownloaderConfig;
+  serviceWorker: ServiceWorkerGate;
   wasmPackage: WasmPackageDownloader;
   assets: AssetDownloader;
+  cache: PageCache;
 }
 
 const DownloaderContext = createContext<Downloader | null>(null);
@@ -108,8 +112,10 @@ export function DownloaderProvider({
     return {
       config,
       notifier,
+      serviceWorker: new ServiceWorkerGate(config),
       wasmPackage: new WasmPackageDownloader(config, notifier),
       assets: new AssetDownloader(config, notifier),
+      cache: new PageCache(config),
     };
   });
 

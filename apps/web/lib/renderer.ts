@@ -1,5 +1,6 @@
 import type { AssetDownloader } from "@/lib/asset-downloader";
 import type { Downloader } from "@/lib/downloader";
+import type { PageCache } from "@/lib/page-cache";
 
 export type RendererDeps = Downloader;
 
@@ -53,6 +54,7 @@ interface RendererModule {
     seed: bigint | undefined,
     camera: Float64Array | undefined,
     notifier: AssetDownloader,
+    cache: PageCache,
   ): Promise<WorldHandle>;
   start_replay(
     canvas: HTMLCanvasElement,
@@ -62,6 +64,7 @@ interface RendererModule {
     camera: Float64Array | undefined,
     replay: ReplayHandle,
     notifier: AssetDownloader,
+    cache: PageCache,
   ): Promise<WorldHandle>;
   start_save(
     canvas: HTMLCanvasElement,
@@ -70,6 +73,7 @@ interface RendererModule {
     camera: Float64Array | undefined,
     save: SaveHandle,
     notifier: AssetDownloader,
+    cache: PageCache,
   ): Promise<WorldHandle>;
   open_replay(bytes: Uint8Array): ReplayHandle;
   open_save(bytes: Uint8Array): SaveHandle;
@@ -92,12 +96,12 @@ let loading: Promise<RendererModule> | undefined;
 
 function loadRenderer(deps: RendererDeps): Promise<RendererModule> {
   loading ??= (async () => {
-    await waitForServiceWorker();
-    await deps.wasmPackage.ensure();
+    await deps.serviceWorker.ready();
+    const { moduleUrl, wasmUrl } = await deps.wasmPackage.ensure();
     const renderer: RendererModule = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ deps.config.moduleUrl
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ moduleUrl
     );
-    await renderer.default({ module_or_path: deps.config.wasmUrl });
+    await renderer.default({ module_or_path: wasmUrl });
     await renderer.initThreadPool(
       Math.max(2, navigator.hardwareConcurrency || 2),
     );
@@ -107,20 +111,6 @@ function loadRenderer(deps: RendererDeps): Promise<RendererModule> {
     throw error;
   });
   return loading;
-}
-
-async function waitForServiceWorker(): Promise<void> {
-  if (!("serviceWorker" in navigator) || navigator.serviceWorker.controller) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    const finish = () => {
-      navigator.serviceWorker.removeEventListener("controllerchange", finish);
-      resolve();
-    };
-    navigator.serviceWorker.addEventListener("controllerchange", finish);
-    setTimeout(finish, 3000);
-  });
 }
 
 export interface StartOptions {
@@ -145,10 +135,11 @@ async function startWith(
     renderer: RendererModule,
     resourcesBase: string,
     notifier: AssetDownloader,
+    cache: PageCache,
   ) => Promise<WorldHandle>,
 ): Promise<WorldHandle> {
   const renderer = await loadRenderer(deps);
-  const { notifier, config, assets } = deps;
+  const { notifier, config, assets, cache } = deps;
   const resourcesBase =
     process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
     new URL(`${config.basePath}/resources`, location.origin).href;
@@ -158,7 +149,7 @@ async function startWith(
         ? renderer.package_version()
         : null,
   });
-  return start(renderer, resourcesBase, assets);
+  return start(renderer, resourcesBase, assets, cache);
 }
 
 export async function startWorld(
@@ -166,7 +157,7 @@ export async function startWorld(
   canvas: HTMLCanvasElement,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(deps, (renderer, resourcesBase, notifier) =>
+  return startWith(deps, (renderer, resourcesBase, notifier, cache) =>
     renderer.start(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
@@ -174,6 +165,7 @@ export async function startWorld(
       options.seed,
       cameraArray(options.camera),
       notifier,
+      cache,
     ),
   );
 }
@@ -184,7 +176,7 @@ export async function startReplayWorld(
   replay: ReplayHandle,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(deps, (renderer, resourcesBase, notifier) =>
+  return startWith(deps, (renderer, resourcesBase, notifier, cache) =>
     renderer.start_replay(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
@@ -193,6 +185,7 @@ export async function startReplayWorld(
       cameraArray(options.camera),
       replay,
       notifier,
+      cache,
     ),
   );
 }
@@ -203,7 +196,7 @@ export async function startSaveWorld(
   save: SaveHandle,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(deps, (renderer, resourcesBase, notifier) =>
+  return startWith(deps, (renderer, resourcesBase, notifier, cache) =>
     renderer.start_save(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
@@ -211,6 +204,7 @@ export async function startSaveWorld(
       cameraArray(options.camera),
       save,
       notifier,
+      cache,
     ),
   );
 }

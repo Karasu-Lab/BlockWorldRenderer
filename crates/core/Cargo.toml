@@ -10,6 +10,7 @@ name = "engine"
 
 [dependencies]
 block ={ version = "0.1.0", path = "../block", optional = true }
+cache = { version = "0.1.0", path = "../cache", optional = true }
 camera = { version = "0.1.0", path = "../camera", optional = true }
 canvas = { version = "0.1.0", path = "../canvas", optional = true }
 data = { version = "0.1.0", path = "../data", optional = true }
@@ -42,6 +43,7 @@ worldtick = { version = "0.1.0", path = "../worldtick", optional = true }
 default = []
 full = [
     "block",
+    "cache",
     "camera",
     "canvas",
     "data",
@@ -71,6 +73,7 @@ full = [
     "worldtick",
 ]
 block = ["dep:block", "registry"]
+cache = ["dep:cache"]
 camera = ["dep:camera"]
 canvas = ["dep:canvas", "block", "camera", "debugger", "renderer", "seed", "settings", "ui", "worldgen"]
 data = ["dep:data", "datacomponent", "registry", "serializer", "resourcepack", "worldgen"]

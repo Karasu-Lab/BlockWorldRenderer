@@ -4,15 +4,16 @@ import { useEffect } from "react";
 import { useDownloader } from "@/lib/downloader";
 
 export function WasmPackage() {
-  const { wasmPackage } = useDownloader();
+  const { serviceWorker, wasmPackage } = useDownloader();
 
   useEffect(() => {
-    wasmPackage
-      .ensure()
+    serviceWorker
+      .ready()
+      .then(() => wasmPackage.ensure())
       .catch((error: unknown) =>
         console.error("wasm package download failed", error),
       );
-  }, [wasmPackage]);
+  }, [serviceWorker, wasmPackage]);
 
   return null;
 }
