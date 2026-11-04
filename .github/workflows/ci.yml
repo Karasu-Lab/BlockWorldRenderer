@@ -45,6 +45,8 @@ jobs:
   wasm:
     name: WebAssembly
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,14 +61,38 @@ jobs:
       - name: Build the WebAssembly package
         run: nix develop -c just web-wasm
 
-      # The Release workflow publishes this exact build as a GitHub
-      # Release once this workflow completes on main.
-      - name: Save the WebAssembly package
-        if: github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: wasm-package
-          path: pkg
+      # On main, the built package is published as a GitHub Release
+      # from this same job. The web app downloads the package from
+      # the latest release at runtime (apps/web/app/wasm-package.tsx),
+      # so the site build does not depend on a release existing. The
+      # tag names the crate version, the Minecraft version the
+      # package targets, and the commit it was built from. The files
+      # ship as they are, no archive; the checksum asset carries the
+      # SHA-256 of the wasm file itself, which the client compares
+      # against its downloaded copy — a different checksum means a
+      # new download.
+      - name: Release the WebAssembly package
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          MC_VERSION=$(sed -n 's/.*pub const VERSION: &str = "\(.*\)".*/\1/p' third_party/Client/pomme-client/src/viewer/steel.rs)
+          TAG="v${VERSION}+mc${MC_VERSION}-$(git rev-parse --short HEAD)"
+          echo "Releasing $TAG"
+          sha256sum pkg/block_world_renderer.wasm | awk '{print $1}' > block_world_renderer.wasm.sha256
+          mapfile -t ASSETS < <(find pkg -type f ! -name 'package.json' ! -name '.gitignore' ! -name '*.d.ts')
+          ASSETS+=(block_world_renderer.wasm.sha256)
+          printf 'Assets: %s\n' "${ASSETS[@]}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes \
+              "${ASSETS[@]}"
+          fi
 
   web:
     name: Web app
