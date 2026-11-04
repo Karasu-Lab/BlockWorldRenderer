@@ -27,6 +27,17 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Cache the Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-rust-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-rust-${{ hashFiles('flake.lock') }}-
+
       - name: Check formatting
         run: nix develop -c cargo fmt --all -- --check
 
@@ -55,6 +66,19 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+
+      # Separate key from the Rust job's: this build compiles for
+      # wasm32 with its own flags, so the two target trees differ.
+      - name: Cache the Rust build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: cargo-wasm-${{ hashFiles('flake.lock') }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            cargo-wasm-${{ hashFiles('flake.lock') }}-
 
       - name: Build the WebAssembly package
         run: nix develop -c just web-wasm
