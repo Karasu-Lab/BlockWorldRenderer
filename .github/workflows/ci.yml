@@ -86,8 +86,6 @@ jobs:
         env:
           STATIC_EXPORT: "1"
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
-          # fetch-wasm uses the token for its latest-release lookup.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: nix develop -c pnpm --dir apps/web run build
 
       # The built site, wasm included, is the whole content of the web

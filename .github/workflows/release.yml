@@ -29,14 +29,14 @@ jobs:
         run: nix develop -c just web-wasm
 
       # The built package is published as a GitHub Release; the web
-      # app fetches the package from the latest release at build time
-      # (apps/web/scripts/fetch-wasm.mjs) instead of depending on a
-      # build job. The tag names the crate version, the Minecraft
-      # version the package targets, and the commit it was built
-      # from. The files ship as they are, no archive; the checksum
-      # asset carries the SHA-256 of the wasm file itself, which the
-      # web app compares against its installed copy to decide
-      # whether to download.
+      # app downloads the package from the latest release at runtime
+      # (apps/web/app/wasm-package.tsx), so the site build does not
+      # depend on a release existing. The tag names the crate
+      # version, the Minecraft version the package targets, and the
+      # commit it was built from. The files ship as they are, no
+      # archive; the checksum asset carries the SHA-256 of the wasm
+      # file itself, which the client compares against its
+      # downloaded copy — a different checksum means a new download.
       - name: Release the WebAssembly package
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
