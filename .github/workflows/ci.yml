@@ -45,8 +45,6 @@ jobs:
   wasm:
     name: WebAssembly
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -60,43 +58,6 @@ jobs:
 
       - name: Build the WebAssembly package
         run: nix develop -c just web-wasm
-
-      # On main, the built package is published as a GitHub Release; the
-      # web app fetches the package from the latest release at build time
-      # (apps/web/scripts/fetch-wasm.mjs) instead of depending on this
-      # job. The tag names the crate version, the Minecraft version the
-      # package targets, and the commit it was built from. The checksum
-      # asset carries the SHA-256 of the wasm file itself, which the web
-      # app compares against its installed copy to decide whether to
-      # download the archive.
-      - name: Release the WebAssembly package
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
-          MC_VERSION=$(sed -n 's/.*pub const VERSION: &str = "\(.*\)".*/\1/p' third_party/Client/pomme-client/src/viewer/steel.rs)
-          TAG="v${VERSION}+mc${MC_VERSION}-$(git rev-parse --short HEAD)"
-          echo "Releasing $TAG"
-          tar -czf block-world-renderer-wasm.tar.gz \
-            --exclude='package.json' \
-            --exclude='.gitignore' \
-            --exclude='*.d.ts' \
-            -C pkg .
-          sha256sum pkg/block_world_renderer.wasm | awk '{print $1}' > block_world_renderer.wasm.sha256
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" \
-              block-world-renderer-wasm.tar.gz \
-              block_world_renderer.wasm.sha256 \
-              --clobber
-          else
-            gh release create "$TAG" \
-              --target "$GITHUB_SHA" \
-              --title "$TAG" \
-              --generate-notes \
-              block-world-renderer-wasm.tar.gz \
-              block_world_renderer.wasm.sha256
-          fi
 
   web:
     name: Web app
@@ -125,8 +86,6 @@ jobs:
         env:
           STATIC_EXPORT: "1"
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
-          # fetch-wasm uses the token for its latest-release lookup.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: nix develop -c pnpm --dir apps/web run build
 
       # The built site, wasm included, is the whole content of the web
