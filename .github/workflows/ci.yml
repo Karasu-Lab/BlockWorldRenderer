@@ -59,6 +59,15 @@ jobs:
       - name: Build the WebAssembly package
         run: nix develop -c just web-wasm
 
+      # The Release workflow publishes this exact build as a GitHub
+      # Release once this workflow completes on main.
+      - name: Save the WebAssembly package
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-package
+          path: pkg
+
   web:
     name: Web app
     runs-on: ubuntu-latest
