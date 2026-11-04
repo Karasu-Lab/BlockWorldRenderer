@@ -182,7 +182,13 @@ async function startWith(
     process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
     new URL(`${BASE_PATH}/resources`, location.origin).href;
   const poll = setInterval(() => {
-    const fileProgress = renderer.load_file_progress();
+    // The package comes from the latest release, which can predate
+    // the site: a package from before the per-file progress export
+    // has no such function, and the poll must not throw for it.
+    const fileProgress =
+      typeof renderer.load_file_progress === "function"
+        ? renderer.load_file_progress()
+        : -1;
     onProgress?.({
       available: renderer.renderer_available(),
       fraction: renderer.load_progress(),
