@@ -72,6 +72,7 @@ interface RendererModule {
   load_file_progress(): number;
   load_status(): string;
   renderer_available(): boolean;
+  package_version(): string;
 }
 
 export interface LoadProgress {
@@ -84,6 +85,11 @@ export interface LoadProgress {
    * fraction, or null while no file download is in flight.
    */
   fileFraction: number | null;
+  /**
+   * The version of the loaded wasm package, or null while the
+   * package predates the version export.
+   */
+  wasmVersion: string | null;
 }
 
 /** A camera the providers describe: position plus look, in degrees. */
@@ -194,6 +200,10 @@ async function startWith(
       fraction: renderer.load_progress(),
       status: renderer.load_status(),
       fileFraction: fileProgress >= 0 ? fileProgress : null,
+      wasmVersion:
+        typeof renderer.package_version === "function"
+          ? renderer.package_version()
+          : null,
     });
   }, 200);
   try {

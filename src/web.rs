@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 use engine::settings::{CameraSettings, ClientSettings, Settings};
 use js_sys::JsString;
 use pomme_client::viewer::assets::{self, Endpoints, Progress};
-use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, install_thread_spawner};
+use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, VERSION, install_thread_spawner};
 use pomme_client::viewer::web::{self, ViewerHandle};
 use pomme_client::viewer::{ViewerCamera, ViewerConfig, WorldSource};
 use tracing_subscriber::prelude::*;
@@ -56,6 +56,12 @@ static RENDERER_AVAILABLE: AtomicBool = AtomicBool::new(false);
 #[wasm_bindgen]
 pub fn renderer_available() -> bool {
     RENDERER_AVAILABLE.load(Ordering::Relaxed)
+}
+
+/// The version of this package.
+#[wasm_bindgen]
+pub fn package_version() -> String {
+    format!("v{}+mc{}", env!("CARGO_PKG_VERSION"), VERSION)
 }
 
 #[wasm_bindgen]

@@ -137,6 +137,7 @@ export function WorldProvider({ children }: { children: ReactNode }) {
           fraction: 0,
           status: "",
           fileFraction: null,
+          wasmVersion: null,
         });
         try {
           const handle = await start(canvas);

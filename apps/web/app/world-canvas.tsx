@@ -38,6 +38,11 @@ export function WorldCanvas() {
           {progress.fileFraction !== null && (
             <Progress value={progress.fileFraction * 100} className="mt-2" />
           )}
+          {progress.wasmVersion && (
+            <p className="mt-2 text-left font-[system-ui] text-sm text-foreground">
+              {progress.wasmVersion}
+            </p>
+          )}
         </div>
       )}
     </>
