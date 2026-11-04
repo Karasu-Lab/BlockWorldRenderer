@@ -1,4 +1,7 @@
-import { ensureWasmPackage } from "@/app/wasm-package";
+import type { AssetDownloader } from "@/lib/asset-downloader";
+import type { Downloader } from "@/lib/downloader";
+
+export type RendererDeps = Downloader;
 
 export interface WorldHandle {
   stop(): void;
@@ -14,7 +17,6 @@ export interface WorldHandle {
   free(): void;
 }
 
-/** One entity of a replay or a world save, as the wasm side reports it. */
 export interface EntityInfo {
   id: number | null;
   uuid: string | null;
@@ -46,10 +48,11 @@ interface RendererModule {
   initThreadPool(threads: number): Promise<unknown>;
   start(
     canvas: HTMLCanvasElement,
-    versionManifest?: string,
-    resourcesBase?: string,
-    seed?: bigint,
-    camera?: Float64Array,
+    versionManifest: string | undefined,
+    resourcesBase: string | undefined,
+    seed: bigint | undefined,
+    camera: Float64Array | undefined,
+    notifier: AssetDownloader,
   ): Promise<WorldHandle>;
   start_replay(
     canvas: HTMLCanvasElement,
@@ -58,6 +61,7 @@ interface RendererModule {
     seed: bigint | undefined,
     camera: Float64Array | undefined,
     replay: ReplayHandle,
+    notifier: AssetDownloader,
   ): Promise<WorldHandle>;
   start_save(
     canvas: HTMLCanvasElement,
@@ -65,52 +69,17 @@ interface RendererModule {
     resourcesBase: string | undefined,
     camera: Float64Array | undefined,
     save: SaveHandle,
+    notifier: AssetDownloader,
   ): Promise<WorldHandle>;
   open_replay(bytes: Uint8Array): ReplayHandle;
   open_save(bytes: Uint8Array): SaveHandle;
-  load_progress(): number;
-  load_file_progress(): number;
-  load_status(): string;
-  renderer_available(): boolean;
   package_version(): string;
 }
 
-export interface LoadProgress {
-  available: boolean;
-  /** Overall progress of the load, as a fraction. */
-  fraction: number;
-  status: string;
-  /**
-   * The progress of the one file currently downloading, as a
-   * fraction, or null while no file download is in flight.
-   */
-  fileFraction: number | null;
-  /**
-   * The version of the loaded wasm package, or null while the
-   * package predates the version export.
-   */
-  wasmVersion: string | null;
-}
-
-/** A camera the providers describe: position plus look, in degrees. */
 export interface CameraSpec {
   position: [number, number, number];
   yaw: number;
   pitch: number;
-}
-
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
-const MODULE_URL = `${BASE_PATH}/wasm/block_world_renderer.js`;
-const WASM_URL = `${BASE_PATH}/wasm/block_world_renderer.wasm`;
-
-/** The URL a file under `public/replays` is served at. */
-export function replayUrl(path: string): string {
-  return `${BASE_PATH}/replays/${path}`;
-}
-
-/** The URL a user-supplied file path (a world save zip) is served at. */
-export function publicUrl(path: string): string {
-  return path.startsWith("/") ? `${BASE_PATH}${path}` : `${BASE_PATH}/${path}`;
 }
 
 export function hasGraphicsApi(): boolean {
@@ -121,17 +90,14 @@ export function hasGraphicsApi(): boolean {
 
 let loading: Promise<RendererModule> | undefined;
 
-function loadRenderer(): Promise<RendererModule> {
+function loadRenderer(deps: RendererDeps): Promise<RendererModule> {
   loading ??= (async () => {
-    // The package is served by the service worker from the cache the
-    // client component fills, so both have to be ready before the
-    // import: the worker controlling the page, the package in cache.
     await waitForServiceWorker();
-    await ensureWasmPackage();
+    await deps.wasmPackage.ensure();
     const renderer: RendererModule = await import(
-      /* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE_URL
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ deps.config.moduleUrl
     );
-    await renderer.default({ module_or_path: WASM_URL });
+    await renderer.default({ module_or_path: deps.config.wasmUrl });
     await renderer.initThreadPool(
       Math.max(2, navigator.hardwareConcurrency || 2),
     );
@@ -143,11 +109,6 @@ function loadRenderer(): Promise<RendererModule> {
   return loading;
 }
 
-/**
- * The service worker serves the game resources under the site's own
- * origin, so the world must not start until it controls the page;
- * without one, start anyway rather than wait forever.
- */
 async function waitForServiceWorker(): Promise<void> {
   if (!("serviceWorker" in navigator) || navigator.serviceWorker.controller) {
     return;
@@ -165,7 +126,6 @@ async function waitForServiceWorker(): Promise<void> {
 export interface StartOptions {
   seed?: bigint;
   camera?: CameraSpec;
-  onProgress?: (progress: LoadProgress) => void;
 }
 
 function cameraArray(camera?: CameraSpec): Float64Array | undefined {
@@ -180,60 +140,51 @@ function cameraArray(camera?: CameraSpec): Float64Array | undefined {
 }
 
 async function startWith(
-  onProgress: ((progress: LoadProgress) => void) | undefined,
-  start: (renderer: RendererModule, resourcesBase: string) => Promise<WorldHandle>,
+  deps: RendererDeps,
+  start: (
+    renderer: RendererModule,
+    resourcesBase: string,
+    notifier: AssetDownloader,
+  ) => Promise<WorldHandle>,
 ): Promise<WorldHandle> {
-  const renderer = await loadRenderer();
+  const renderer = await loadRenderer(deps);
+  const { notifier, config, assets } = deps;
   const resourcesBase =
     process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
-    new URL(`${BASE_PATH}/resources`, location.origin).href;
-  const poll = setInterval(() => {
-    // The package comes from the latest release, which can predate
-    // the site: a package from before the per-file progress export
-    // has no such function, and the poll must not throw for it.
-    const fileProgress =
-      typeof renderer.load_file_progress === "function"
-        ? renderer.load_file_progress()
-        : -1;
-    onProgress?.({
-      available: renderer.renderer_available(),
-      fraction: renderer.load_progress(),
-      status: renderer.load_status(),
-      fileFraction: fileProgress >= 0 ? fileProgress : null,
-      wasmVersion:
-        typeof renderer.package_version === "function"
-          ? renderer.package_version()
-          : null,
-    });
-  }, 200);
-  try {
-    return await start(renderer, resourcesBase);
-  } finally {
-    clearInterval(poll);
-  }
+    new URL(`${config.basePath}/resources`, location.origin).href;
+  notifier.update({
+    wasmVersion:
+      typeof renderer.package_version === "function"
+        ? renderer.package_version()
+        : null,
+  });
+  return start(renderer, resourcesBase, assets);
 }
 
 export async function startWorld(
+  deps: RendererDeps,
   canvas: HTMLCanvasElement,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(options.onProgress, (renderer, resourcesBase) =>
+  return startWith(deps, (renderer, resourcesBase, notifier) =>
     renderer.start(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
       resourcesBase,
       options.seed,
       cameraArray(options.camera),
+      notifier,
     ),
   );
 }
 
 export async function startReplayWorld(
+  deps: RendererDeps,
   canvas: HTMLCanvasElement,
   replay: ReplayHandle,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(options.onProgress, (renderer, resourcesBase) =>
+  return startWith(deps, (renderer, resourcesBase, notifier) =>
     renderer.start_replay(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
@@ -241,35 +192,42 @@ export async function startReplayWorld(
       options.seed,
       cameraArray(options.camera),
       replay,
+      notifier,
     ),
   );
 }
 
 export async function startSaveWorld(
+  deps: RendererDeps,
   canvas: HTMLCanvasElement,
   save: SaveHandle,
   options: StartOptions = {},
 ): Promise<WorldHandle> {
-  return startWith(options.onProgress, (renderer, resourcesBase) =>
+  return startWith(deps, (renderer, resourcesBase, notifier) =>
     renderer.start_save(
       canvas,
       process.env.NEXT_PUBLIC_VERSION_MANIFEST_URL,
       resourcesBase,
       cameraArray(options.camera),
       save,
+      notifier,
     ),
   );
 }
 
-/** Opens a replay file's bytes; throws with the parser's message. */
-export async function openReplay(bytes: Uint8Array): Promise<ReplayHandle> {
-  const renderer = await loadRenderer();
+export async function openReplay(
+  deps: RendererDeps,
+  bytes: Uint8Array,
+): Promise<ReplayHandle> {
+  const renderer = await loadRenderer(deps);
   return renderer.open_replay(bytes);
 }
 
-/** Opens a world save zip's bytes; throws with the parser's message. */
-export async function openSave(bytes: Uint8Array): Promise<SaveHandle> {
-  const renderer = await loadRenderer();
+export async function openSave(
+  deps: RendererDeps,
+  bytes: Uint8Array,
+): Promise<SaveHandle> {
+  const renderer = await loadRenderer(deps);
   return renderer.open_save(bytes);
 }
 

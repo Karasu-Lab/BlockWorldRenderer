@@ -10,38 +10,20 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  openReplay,
-  parseEntities,
-  replayUrl,
-  type ReplayHandle,
-} from "@/lib/renderer";
+import { useDownloader } from "@/lib/downloader";
+import { openReplay, parseEntities, type ReplayHandle } from "@/lib/renderer";
 import { useWorld } from "@/lib/world";
 
 export interface ReplayControls {
-  /**
-   * Loads the replay into the viewer. When the file does not exist,
-   * nothing is loaded and the generated world stays on screen.
-   */
   load: () => Promise<void>;
-  /**
-   * Moves the playhead; backward seeks replay from the start. The
-   * viewer restarts on the new position, so the columns on screen
-   * are the ones the recording had sent by then.
-   */
   seek: (timeMs: number) => void;
-  /** The current playhead position, in milliseconds. */
   time: number;
-  /** The recording's total length, in milliseconds (0 before load). */
   duration: number;
   play: () => void;
   pause: () => void;
-  /** Pauses and returns the playhead to the start. */
   stop: () => void;
-  /** Unloads the replay and returns to the generated world. */
   close: () => Promise<void>;
   isPlaying: boolean;
-  /** Whether the replay file exists and could be opened. */
   available: boolean;
 }
 
@@ -58,6 +40,7 @@ const ReplayContext = createContext<{
 
 export function ReplayProvider({ children }: { children: ReactNode }) {
   const world = useWorld();
+  const downloader = useDownloader();
   const [time, setTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -90,15 +73,15 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
       setDuration(0);
       setAvailable(false);
       void (async () => {
-        const response = await fetch(replayUrl(path));
-        if (!response.ok) return; // No replay file: the world stays.
+        const response = await fetch(downloader.config.replayUrl(path));
+        if (!response.ok) return;
         const bytes = new Uint8Array(await response.arrayBuffer());
         if (sessionRef.current?.path !== path) return;
         sessionRef.current.bytes = bytes;
         setAvailable(true);
       })();
     },
-    [cancelLoop],
+    [cancelLoop, downloader.config],
   );
 
   const load = useCallback(async () => {
@@ -106,13 +89,13 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
     if (!session || session.bytes.length === 0) return;
     cancelLoop();
     session.handle?.free();
-    session.handle = await openReplay(session.bytes);
+    session.handle = await openReplay(downloader, session.bytes);
     await world.showReplay(session.handle);
     session.handle.apply_until(0);
     setDuration(session.handle.duration_ms());
     setTime(0);
     syncEntities();
-  }, [cancelLoop, syncEntities, world]);
+  }, [cancelLoop, downloader, syncEntities, world]);
 
   const startPlayback = useCallback(() => {
     if (rafRef.current !== null) return;
@@ -151,11 +134,6 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
       handle.apply_until(clamped);
       setTime(clamped);
       syncEntities();
-      // The viewer keeps the columns it already loaded, so the
-      // viewer restarts on the moved playhead to show the state the
-      // recording had reached by then. Restarts are chained: rapid
-      // seeks queue up instead of racing, and the last one leaves
-      // the viewer on the final state.
       restartChainRef.current = restartChainRef.current
         .catch(() => {})
         .then(() => world.showReplay(handle))
@@ -219,11 +197,6 @@ export function ReplayProvider({ children }: { children: ReactNode }) {
     <ReplayContext.Provider value={value}>{children}</ReplayContext.Provider>
   );
 }
-
-/**
- * Binds a replay file under `public/replays` and returns the controls
- * to operate it from anywhere in the tree.
- */
 export function useReplay(path: string): ReplayControls {
   const context = useContext(ReplayContext);
   if (!context) throw new Error("useReplay outside ReplayProvider");

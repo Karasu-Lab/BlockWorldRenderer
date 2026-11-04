@@ -1,8 +1,22 @@
 {
   "graphicsUnsupported": "このブラウザは WebGPU と WebGL2 のどちらにも対応していません。",
+  "download": {
+    "file": "{{file}} をダウンロードしています",
+    "verify": "wasm パッケージを検証しています",
+    "info": "バージョン情報を取得しています",
+    "assets": "アセットをダウンロードしています ({{done}} / {{total}} MB)",
+    "client": "クライアントをダウンロードしています",
+    "extract": "クライアントを展開しています ({{done}} / {{total}})",
+    "save": "アセットを保存しています ({{done}} / {{total}})"
+  },
   "errors": {
     "startFailed": "ワールドの描画を開始できませんでした。",
     "unexpected": "予期しないエラーが発生しました。",
-    "copy": "コピー"
+    "copy": "コピー",
+    "downloadFailed": "{{url}} のダウンロードに失敗しました (HTTP {{status}})。",
+    "hashMismatch": "{{url}} のハッシュが一致しませんでした。",
+    "checksumMismatch": "ダウンロードした {{file}} がリリースのチェックサムと一致しません。",
+    "packageUnavailable": "wasm パッケージがキャッシュになく、ダウンロードもできません。",
+    "fetchFailed": "{{path}} を取得できませんでした (HTTP {{status}})。"
   }
 }
