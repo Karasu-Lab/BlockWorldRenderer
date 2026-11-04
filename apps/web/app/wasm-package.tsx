@@ -4,13 +4,15 @@ import { useEffect } from "react";
 
 // The wasm package is published as individual files on the latest
 // GitHub Release, and the client downloads it from there at runtime,
-// so the site build has no dependency on the release. Release assets
-// send no CORS headers, so the files are fetched in no-cors mode —
-// the bytes are readable even though the headers are not — and put
-// in the cache the service worker serves /wasm/ from, under the
-// paths the package's own files reference.
+// so the site build has no dependency on the release. Release
+// downloads send no CORS headers, so a direct fetch would be an
+// opaque response whose bytes the page cannot read — the download
+// goes through the API's proxy instead, which relays the release
+// with CORS headers, the same route the game resources take. The
+// files are put in the cache the service worker serves /wasm/ from,
+// under the paths the package's own files reference.
 const RELEASE_BASE =
-  "https://github.com/Karasu-Lab/BlockWorldRenderer/releases/latest/download";
+  "https://api.karasu256.com/api/proxy/github/Karasu-Lab/BlockWorldRenderer/releases/latest/download";
 // Must match WASM_CACHE in public/sw.js.
 const WASM_CACHE = "block-world-renderer-wasm-v1";
 const CHECKSUM_KEY = "block-world-renderer-wasm-checksum";
@@ -25,9 +27,10 @@ function packageUrl(path: string): string {
 }
 
 async function download(name: string): Promise<ArrayBuffer> {
-  const response = await fetch(`${RELEASE_BASE}/${name}`, {
-    mode: "no-cors",
-  });
+  const response = await fetch(`${RELEASE_BASE}/${name}`);
+  if (!response.ok) {
+    throw new Error(`downloading ${name} failed with ${response.status}`);
+  }
   return response.arrayBuffer();
 }
 
