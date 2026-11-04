@@ -21,6 +21,8 @@ static LOADING: Mutex<Progress> = Mutex::new(Progress {
     done: 0,
     total: 0,
     status: String::new(),
+    file_done: 0,
+    file_total: 0,
 });
 
 fn loading() -> MutexGuard<'static, Progress> {
@@ -30,6 +32,18 @@ fn loading() -> MutexGuard<'static, Progress> {
 #[wasm_bindgen]
 pub fn load_progress() -> f32 {
     loading().fraction()
+}
+
+/// The progress of the one file currently downloading, or a negative
+/// value while no file download is in flight.
+#[wasm_bindgen]
+pub fn load_file_progress() -> f32 {
+    let progress = loading();
+    if progress.file_total == 0 {
+        -1.0
+    } else {
+        progress.file_done as f32 / progress.file_total as f32
+    }
 }
 
 #[wasm_bindgen]

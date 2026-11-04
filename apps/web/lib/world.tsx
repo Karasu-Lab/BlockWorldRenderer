@@ -120,26 +120,44 @@ export function WorldProvider({ children }: { children: ReactNode }) {
     handleRef.current = null;
   }, []);
 
+  const runChainRef = useRef<Promise<void>>(Promise.resolve());
+
   const run = useCallback(
-    async (
+    (
       start: (canvas: HTMLCanvasElement) => Promise<WorldHandle>,
       nextMode: WorldMode,
-    ) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      stopCurrent();
-      setIsLoading(true);
-      setProgress({ available: false, fraction: 0, status: "" });
-      try {
-        const handle = await start(canvas);
-        handleRef.current = handle;
-        setMode(nextMode);
-      } catch (error) {
-        throw new UserFacingError(t("errors.startFailed"), error);
-      } finally {
-        setIsLoading(false);
-        setProgress(null);
-      }
+    ): Promise<void> => {
+      const task = async () => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        stopCurrent();
+        setIsLoading(true);
+        setProgress({
+          available: false,
+          fraction: 0,
+          status: "",
+          fileFraction: null,
+        });
+        try {
+          const handle = await start(canvas);
+          handleRef.current = handle;
+          setMode(nextMode);
+        } catch (error) {
+          throw new UserFacingError(t("errors.startFailed"), error);
+        } finally {
+          setIsLoading(false);
+          setProgress(null);
+        }
+      };
+      // Starts run one at a time: a start that begins while another
+      // is still loading would download alongside it, and the two
+      // would fight over the one shared progress state.
+      const result = runChainRef.current.then(task, task);
+      runChainRef.current = result.then(
+        () => {},
+        () => {},
+      );
+      return result;
     },
     [stopCurrent, t],
   );

@@ -35,6 +35,9 @@ export function WorldCanvas() {
           <Progress
             value={progress.available ? progress.fraction * 100 : null}
           />
+          {progress.fileFraction !== null && (
+            <Progress value={progress.fileFraction * 100} className="mt-2" />
+          )}
         </div>
       )}
     </>

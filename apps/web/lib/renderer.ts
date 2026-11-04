@@ -67,14 +67,21 @@ interface RendererModule {
   open_replay(bytes: Uint8Array): ReplayHandle;
   open_save(bytes: Uint8Array): SaveHandle;
   load_progress(): number;
+  load_file_progress(): number;
   load_status(): string;
   renderer_available(): boolean;
 }
 
 export interface LoadProgress {
   available: boolean;
+  /** Overall progress of the load, as a fraction. */
   fraction: number;
   status: string;
+  /**
+   * The progress of the one file currently downloading, as a
+   * fraction, or null while no file download is in flight.
+   */
+  fileFraction: number | null;
 }
 
 /** A camera the providers describe: position plus look, in degrees. */
@@ -168,15 +175,15 @@ async function startWith(
   const resourcesBase =
     process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
     new URL(`${BASE_PATH}/resources`, location.origin).href;
-  const poll = setInterval(
-    () =>
-      onProgress?.({
-        available: renderer.renderer_available(),
-        fraction: renderer.load_progress(),
-        status: renderer.load_status(),
-      }),
-    200,
-  );
+  const poll = setInterval(() => {
+    const fileProgress = renderer.load_file_progress();
+    onProgress?.({
+      available: renderer.renderer_available(),
+      fraction: renderer.load_progress(),
+      status: renderer.load_status(),
+      fileFraction: fileProgress >= 0 ? fileProgress : null,
+    });
+  }, 200);
   try {
     return await start(renderer, resourcesBase);
   } finally {
