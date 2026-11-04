@@ -1,0 +1,60 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Release the WebAssembly package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Build the WebAssembly package
+        run: nix develop -c just web-wasm
+
+      # The built package is published as a GitHub Release; the web
+      # app fetches the package from the latest release at build time
+      # (apps/web/scripts/fetch-wasm.mjs) instead of depending on a
+      # build job. The tag names the crate version, the Minecraft
+      # version the package targets, and the commit it was built
+      # from. The files ship as they are, no archive; the checksum
+      # asset carries the SHA-256 of the wasm file itself, which the
+      # web app compares against its installed copy to decide
+      # whether to download.
+      - name: Release the WebAssembly package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
+          MC_VERSION=$(sed -n 's/.*pub const VERSION: &str = "\(.*\)".*/\1/p' third_party/Client/pomme-client/src/viewer/steel.rs)
+          TAG="v${VERSION}+mc${MC_VERSION}-$(git rev-parse --short HEAD)"
+          echo "Releasing $TAG"
+          sha256sum pkg/block_world_renderer.wasm | awk '{print $1}' > block_world_renderer.wasm.sha256
+          mapfile -t ASSETS < <(find pkg -type f ! -name 'package.json' ! -name '.gitignore' ! -name '*.d.ts')
+          ASSETS+=(block_world_renderer.wasm.sha256)
+          printf 'Assets: %s\n' "${ASSETS[@]}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "${ASSETS[@]}" --clobber
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes \
+              "${ASSETS[@]}"
+          fi
