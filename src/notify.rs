@@ -73,10 +73,7 @@ fn descriptor(file: &Fetch) -> Result<JsValue, String> {
             .map_err(failure)
     };
     set("url", JsValue::from_str(&file.url))?;
-    set(
-        "key",
-        JsValue::from_str(&engine::cache::key(&file.path)),
-    )?;
+    set("key", JsValue::from_str(&engine::cache::key(&file.path)))?;
     set("size", JsValue::from_f64(file.size as f64))?;
     set("expected", JsValue::from_str(&file.expected))?;
     Ok(object.into())

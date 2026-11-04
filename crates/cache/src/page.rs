@@ -8,6 +8,7 @@ use crate::{CacheError, Entry, cache_name, key, path_of};
 
 #[wasm_bindgen]
 extern "C" {
+    #[derive(Clone)]
     pub type CacheNotifier;
 
     #[wasm_bindgen(method, catch, js_name = loadCache)]

@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 
 use engine::cache::CacheNotifier;
-use engine::wgpu::backend::RendererProfile;
 use engine::settings::{CameraSettings, ClientSettings, Settings};
+use engine::wgpu::backend::RendererProfile;
 use js_sys::JsString;
 use pomme_client::viewer::assets::{self, Endpoints, HttpTransfer, Progress, Stage};
 use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, VERSION, install_thread_spawner};

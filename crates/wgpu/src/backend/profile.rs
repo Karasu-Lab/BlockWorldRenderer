@@ -7,7 +7,9 @@ pub enum RendererProfile {
 impl RendererProfile {
     pub fn detect() -> Self {
         #[cfg(target_arch = "wasm32")]
-        if let Some(agent) = web_sys::window().and_then(|window| window.navigator().user_agent().ok()) {
+        if let Some(agent) =
+            web_sys::window().and_then(|window| window.navigator().user_agent().ok())
+        {
             return Self::from_user_agent(&agent);
         }
         Self::Desktop
@@ -15,7 +17,8 @@ impl RendererProfile {
 
     pub fn from_user_agent(agent: &str) -> Self {
         let firefox = agent.contains("Firefox/") || agent.contains("FxiOS/");
-        let mobile = agent.contains("Android") || agent.contains("Mobile") || agent.contains("FxiOS/");
+        let mobile =
+            agent.contains("Android") || agent.contains("Mobile") || agent.contains("FxiOS/");
         if firefox && mobile {
             Self::FirefoxMobile
         } else {
