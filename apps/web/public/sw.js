@@ -1,18 +1,10 @@
-// Serves the wasm package and game resources from a cache, and adds the
+// Serves the wasm package from the cache the page saves it in, and adds the
 // cross-origin isolation headers to what it serves, for hosts that cannot.
 
-const VERSION = "v1";
-const WASM_CACHE = `block-world-renderer-wasm-${VERSION}`;
-const RESOURCE_CACHE = `block-world-renderer-resources-${VERSION}`;
-const CACHES = [WASM_CACHE, RESOURCE_CACHE];
-
-// Resource files are addressed by their hash, so a cached copy never goes stale.
-const RESOURCE_HOSTS = new Set([
-  "resources.download.minecraft.net",
-  "piston-data.mojang.com",
-  "piston-meta.mojang.com",
-  "launchermeta.mojang.com",
-]);
+const PARAMS = new URL(self.location.href).searchParams;
+const WASM_CACHE = PARAMS.get("wasmCache");
+const CACHE_PREFIX = PARAMS.get("cachePrefix");
+const RESOURCE_PROXY = PARAMS.get("resourceProxy");
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -24,7 +16,7 @@ self.addEventListener("activate", (event) => {
       const names = await caches.keys();
       await Promise.all(
         names
-          .filter((name) => name.startsWith("block-world-renderer-") && !CACHES.includes(name))
+          .filter((name) => CACHE_PREFIX && name.startsWith(CACHE_PREFIX) && name !== WASM_CACHE)
           .map((name) => caches.delete(name)),
       );
       await self.clients.claim();
@@ -46,27 +38,10 @@ function isolate(response) {
   });
 }
 
-async function cacheFirst(request, cacheName) {
+async function cached(request, cacheName) {
+  if (!cacheName) return fetch(request);
   const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
-  return response;
-}
-
-async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName);
-  const cached = await cache.match(request);
-  const update = fetch(request).then(async (response) => {
-    if (response.ok) await cache.put(request, response.clone());
-    return response;
-  });
-  if (cached) {
-    update.catch(() => {});
-    return cached;
-  }
-  return update;
+  return (await cache.match(request)) ?? fetch(request);
 }
 
 // The path the app is served under ("" at a root, "/BlockWorldRenderer"
@@ -77,24 +52,20 @@ async function respond(request) {
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
     if (url.pathname.startsWith(`${BASE_PATH}/wasm/`)) {
-      return isolate(await staleWhileRevalidate(request, WASM_CACHE));
+      return isolate(await cached(request, WASM_CACHE));
     }
-    if (url.pathname.startsWith(`${BASE_PATH}/resources/`)) {
+    if (RESOURCE_PROXY && url.pathname.startsWith(`${BASE_PATH}/resources/`)) {
       // The app addresses game resources under the site's own origin; the
       // files themselves are Mojang's, keyed by hash. Mojang's resource
       // host sends no CORS headers, so the worker cannot fetch it
       // directly — the API relays the same path with CORS headers.
       const object = url.pathname.slice(`${BASE_PATH}/resources/`.length);
-      const upstream = new Request(
-        `https://api.karasu256.com/api/proxy/mojang/${object}`,
-        { headers: request.headers },
-      );
-      return isolate(await cacheFirst(upstream, RESOURCE_CACHE));
+      const upstream = new Request(`${RESOURCE_PROXY}/${object}`, {
+        headers: request.headers,
+      });
+      return isolate(await fetch(upstream));
     }
     return isolate(await fetch(request));
-  }
-  if (RESOURCE_HOSTS.has(url.hostname)) {
-    return cacheFirst(request, RESOURCE_CACHE);
   }
   return fetch(request);
 }
