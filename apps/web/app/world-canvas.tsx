@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 import { useTranslation } from "react-i18next";
 import { Progress } from "@/components/ui/progress";
+import { useDownloadProgress } from "@/lib/downloader";
 import { hasGraphicsApi } from "@/lib/renderer";
 import { useWorld } from "@/lib/world";
 
@@ -16,7 +17,21 @@ export function WorldCanvas() {
     hasGraphicsApi,
     () => true,
   );
-  const progress = world.progress;
+  const progress = useDownloadProgress();
+  const megabytes = (bytes: number) => (bytes / 1048576).toFixed(1);
+  const status = progress.step
+    ? t(`download.${progress.step}`, {
+        file: progress.file,
+        done:
+          progress.step === "assets"
+            ? megabytes(progress.done)
+            : progress.done,
+        total:
+          progress.step === "assets"
+            ? megabytes(progress.total)
+            : progress.total,
+      })
+    : "";
 
   return (
     <>
@@ -25,19 +40,13 @@ export function WorldCanvas() {
         className="world"
       />
       {!supported && <p className="notice">{t("graphicsUnsupported")}</p>}
-      {progress && (
+      {(world.isLoading || progress.active) && (
         <div className="fixed inset-x-0 bottom-0 p-4">
-          {progress.available && progress.status && (
-            <p className="mb-2 font-[system-ui] text-sm text-foreground">
-              {progress.status}
-            </p>
-          )}
-          <Progress
-            value={progress.available ? progress.fraction * 100 : null}
-          />
-          {progress.fileFraction !== null && (
-            <Progress value={progress.fileFraction * 100} className="mt-2" />
-          )}
+          <p className="mb-2 min-h-5 font-[system-ui] text-sm text-foreground">
+            {status}
+          </p>
+          <Progress value={progress.fraction * 100} />
+          <Progress value={progress.fileFraction * 100} className="mt-2" />
           {progress.wasmVersion && (
             <p className="mt-2 text-left font-[system-ui] text-sm text-foreground">
               {progress.wasmVersion}

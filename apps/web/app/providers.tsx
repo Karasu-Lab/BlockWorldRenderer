@@ -6,6 +6,7 @@ import { I18nextProvider, useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { UserFacingError, describe } from "@/lib/errors";
+import { DownloaderProvider } from "@/lib/downloader";
 import i18n from "@/lib/i18n";
 import { ReplayProvider } from "@/lib/replay";
 import { WorldProvider } from "@/lib/world";
@@ -69,9 +70,11 @@ export function Providers({ children }: { children: ReactNode }) {
     >
       <I18nextProvider i18n={i18n}>
         <GlobalErrorToasts />
-        <WorldProvider>
-          <ReplayProvider>{children}</ReplayProvider>
-        </WorldProvider>
+        <DownloaderProvider>
+          <WorldProvider>
+            <ReplayProvider>{children}</ReplayProvider>
+          </WorldProvider>
+        </DownloaderProvider>
         <Toaster />
       </I18nextProvider>
     </ThemeProvider>

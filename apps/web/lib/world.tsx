@@ -11,7 +11,8 @@ import {
   type ReactNode,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { UserFacingError } from "@/lib/errors";
+import { useDownloader } from "@/lib/downloader";
+import { TranslatedError, UserFacingError } from "@/lib/errors";
 import {
   openSave,
   parseEntities,
@@ -19,15 +20,12 @@ import {
   startWorld,
   type CameraSpec,
   type EntityInfo,
-  type LoadProgress,
   type ReplayHandle,
   type SaveHandle,
   type WorldHandle,
   startReplayWorld,
-  publicUrl,
 } from "@/lib/renderer";
 
-/** The seed and camera the generated view starts from. */
 export const DEFAULT_SEED = BigInt(8675309);
 export const DEFAULT_CAMERA: CameraSpec = {
   position: [0, 90, 0],
@@ -35,30 +33,19 @@ export const DEFAULT_CAMERA: CameraSpec = {
   pitch: 20,
 };
 
-/** What the canvas is currently showing. */
 export type WorldMode = "world" | "save" | "replay";
 
 export interface WorldContextValue {
-  /** The seed `generate` builds the world from. */
   seed: bigint;
   setSeed: (seed: bigint) => void;
-  /** The camera `generate` starts at, and `setCamera` moves live. */
   camera: CameraSpec;
   setCamera: (camera: CameraSpec) => void;
-  /** (Re)starts the generated world with the current seed and camera. */
   generate: () => Promise<void>;
-  /**
-   * Loads a world save: fetches the zip at `path`, reads its seed and
-   * players, and shows it. Its players become the entity list.
-   */
   load: (path: string) => Promise<void>;
   isLoading: boolean;
-  progress: LoadProgress | null;
   mode: WorldMode;
-  /** The entities of the current replay or save. */
   entities: EntityInfo[];
   players: EntityInfo[];
-  // Session plumbing the replay provider and the canvas build on.
   attachCanvas: (canvas: HTMLCanvasElement | null) => void;
   showReplay: (replay: ReplayHandle) => Promise<void>;
   showWorld: () => Promise<void>;
@@ -67,15 +54,10 @@ export interface WorldContextValue {
 }
 
 export interface CameraContextValue {
-  /** The player entity the camera is following, if any. */
   followed: EntityInfo | null;
-  /** Follows an entity (a player, for the viewpoint to make sense). */
   follow: (entity: EntityInfo) => void;
-  /** Stops following; the camera stays where it is. */
   unfollow: () => void;
-  /** Follows the next player in the entity list, wrapping around. */
   nextPlayer: () => void;
-  /** Follows the previous player in the entity list, wrapping around. */
   prevPlayer: () => void;
 }
 
@@ -94,10 +76,10 @@ function eyeCamera(entity: EntityInfo): CameraSpec | null {
 
 export function WorldProvider({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
+  const downloader = useDownloader();
   const [seed, setSeed] = useState<bigint>(DEFAULT_SEED);
   const [camera, setCameraState] = useState<CameraSpec>(DEFAULT_CAMERA);
   const [isLoading, setIsLoading] = useState(false);
-  const [progress, setProgress] = useState<LoadProgress | null>(null);
   const [mode, setMode] = useState<WorldMode>("world");
   const [entities, setEntities] = useState<EntityInfo[]>([]);
   const [followedKey, setFollowedKey] = useState<string | null>(null);
@@ -132,13 +114,7 @@ export function WorldProvider({ children }: { children: ReactNode }) {
         if (!canvas) return;
         stopCurrent();
         setIsLoading(true);
-        setProgress({
-          available: false,
-          fraction: 0,
-          status: "",
-          fileFraction: null,
-          wasmVersion: null,
-        });
+        downloader.notifier.begin();
         try {
           const handle = await start(canvas);
           handleRef.current = handle;
@@ -146,13 +122,10 @@ export function WorldProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           throw new UserFacingError(t("errors.startFailed"), error);
         } finally {
+          downloader.notifier.end();
           setIsLoading(false);
-          setProgress(null);
         }
       };
-      // Starts run one at a time: a start that begins while another
-      // is still loading would download alongside it, and the two
-      // would fight over the one shared progress state.
       const result = runChainRef.current.then(task, task);
       runChainRef.current = result.then(
         () => {},
@@ -160,7 +133,7 @@ export function WorldProvider({ children }: { children: ReactNode }) {
       );
       return result;
     },
-    [stopCurrent, t],
+    [stopCurrent, t, downloader],
   );
 
   const generate = useCallback(async () => {
@@ -168,30 +141,31 @@ export function WorldProvider({ children }: { children: ReactNode }) {
     setFollowedKey(null);
     await run(
       (canvas) =>
-        startWorld(canvas, {
+        startWorld(downloader, canvas, {
           seed: seedRef.current,
           camera: cameraRef.current,
-          onProgress: setProgress,
         }),
       "world",
     );
-  }, [run]);
+  }, [run, downloader]);
 
   const load = useCallback(
     async (path: string) => {
-      const response = await fetch(publicUrl(path));
+      const response = await fetch(downloader.config.publicUrl(path));
       if (!response.ok) {
-        throw new Error(`cannot fetch ${path}: ${response.status}`);
+        throw new TranslatedError("errors.fetchFailed", {
+          path,
+          status: response.status,
+        });
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
-      const save: SaveHandle = await openSave(bytes);
+      const save: SaveHandle = await openSave(downloader, bytes);
       const players = parseEntities(save.players_json());
       const saveSeed = save.seed();
       await run(
         (canvas) =>
-          startSaveWorld(canvas, save, {
+          startSaveWorld(downloader, canvas, save, {
             camera: cameraRef.current,
-            onProgress: setProgress,
           }),
         "save",
       );
@@ -199,22 +173,21 @@ export function WorldProvider({ children }: { children: ReactNode }) {
       setEntities(players);
       setFollowedKey(null);
     },
-    [run],
+    [run, downloader],
   );
 
   const showReplay = useCallback(
     async (replay: ReplayHandle) => {
       await run(
         (canvas) =>
-          startReplayWorld(canvas, replay, {
+          startReplayWorld(downloader, canvas, replay, {
             seed: seedRef.current,
             camera: cameraRef.current,
-            onProgress: setProgress,
           }),
         "replay",
       );
     },
-    [run],
+    [run, downloader],
   );
 
   const showWorld = useCallback(async () => {
@@ -271,8 +244,6 @@ export function WorldProvider({ children }: { children: ReactNode }) {
     [entities, followedKey],
   );
 
-  // While a player is followed, the camera tracks their viewpoint
-  // whenever the entity list moves them.
   useEffect(() => {
     if (!followed) return;
     const eye = eyeCamera(followed);
@@ -315,7 +286,6 @@ export function WorldProvider({ children }: { children: ReactNode }) {
       generate,
       load,
       isLoading,
-      progress,
       mode,
       entities,
       players,
@@ -332,7 +302,6 @@ export function WorldProvider({ children }: { children: ReactNode }) {
       generate,
       load,
       isLoading,
-      progress,
       mode,
       entities,
       players,

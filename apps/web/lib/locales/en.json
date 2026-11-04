@@ -1,8 +1,22 @@
 {
   "graphicsUnsupported": "This browser supports neither WebGPU nor WebGL2.",
+  "download": {
+    "file": "Downloading {{file}}",
+    "verify": "Verifying the wasm package",
+    "info": "Fetching version info",
+    "assets": "Downloading assets ({{done}} / {{total}} MB)",
+    "client": "Downloading the client",
+    "extract": "Extracting the client ({{done}} / {{total}})",
+    "save": "Saving the assets ({{done}} / {{total}})"
+  },
   "errors": {
     "startFailed": "The world could not be started.",
     "unexpected": "An unexpected error occurred.",
-    "copy": "Copy"
+    "copy": "Copy",
+    "downloadFailed": "Downloading {{url}} failed (HTTP {{status}}).",
+    "hashMismatch": "{{url}} did not match its hash.",
+    "checksumMismatch": "The downloaded {{file}} does not match the release checksum.",
+    "packageUnavailable": "The wasm package is not cached and cannot be downloaded.",
+    "fetchFailed": "Could not fetch {{path}} (HTTP {{status}})."
   }
 }

@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 
 use engine::settings::{CameraSettings, ClientSettings, Settings};
 use js_sys::JsString;
-use pomme_client::viewer::assets::{self, Endpoints, Progress};
+use pomme_client::viewer::assets::{self, Endpoints, HttpTransfer, Progress, Stage};
 use pomme_client::viewer::steel::{PROTOCOL, SteelWorld, VERSION, install_thread_spawner};
 use pomme_client::viewer::web::{self, ViewerHandle};
 use pomme_client::viewer::{ViewerCamera, ViewerConfig, WorldSource};
@@ -12,12 +12,14 @@ use tracing_subscriber::prelude::*;
 use wasm_bindgen::prelude::*;
 use web_sys::HtmlCanvasElement;
 
+use crate::notify::{self, DownloadNotifier, NotifyTransfer};
 #[cfg(feature = "replay")]
 use crate::replay::ReplaySession;
 #[cfg(feature = "save")]
 use crate::save::SaveData;
 
 static LOADING: Mutex<Progress> = Mutex::new(Progress {
+    stage: Stage::Info,
     done: 0,
     total: 0,
     status: String::new(),
@@ -148,6 +150,7 @@ struct Prepared {
 async fn prepare(
     version_manifest: Option<String>,
     resources_base: Option<String>,
+    notifier: Option<DownloadNotifier>,
 ) -> Result<Prepared, JsError> {
     init_logging();
     let settings = Settings {
@@ -168,13 +171,29 @@ async fn prepare(
     if let Some(url) = resources_base {
         endpoints.resources_base = url;
     }
-    let dirs = assets::prepare(
-        pomme_client::viewer::steel::VERSION,
-        endpoints,
-        client.resource_pack_location.clone(),
-        &|progress| *loading() = progress,
-    )
-    .await
+    let report = |progress: Progress| {
+        notify::notify(&progress);
+        *loading() = progress;
+    };
+    let version = pomme_client::viewer::steel::VERSION;
+    let location = client.resource_pack_location.clone();
+    let dirs = match notifier {
+        Some(notifier) => {
+            notify::listen(notifier.clone().unchecked_into::<DownloadNotifier>());
+            let transfer = NotifyTransfer::new(notifier, assets::ASSETS_NAMESPACE);
+            assets::prepare_with(&transfer, version, endpoints, location, &report).await
+        }
+        None => {
+            assets::prepare_with(
+                &HttpTransfer::default(),
+                version,
+                endpoints,
+                location,
+                &report,
+            )
+            .await
+        }
+    }
     .map_err(failure)?;
     Ok(Prepared { client, dirs })
 }
@@ -259,8 +278,9 @@ pub async fn start(
     resources_base: Option<String>,
     seed: Option<i64>,
     camera: Option<Vec<f64>>,
+    notifier: Option<DownloadNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier).await?;
     let world = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
 }
@@ -320,8 +340,9 @@ pub async fn start_replay(
     seed: Option<i64>,
     camera: Option<Vec<f64>>,
     replay: &ReplayHandle,
+    notifier: Option<DownloadNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier).await?;
     let base = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
     let world = crate::replay::ReplayWorld::new(base, replay.session.state());
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
@@ -363,8 +384,9 @@ pub async fn start_save(
     resources_base: Option<String>,
     camera: Option<Vec<f64>>,
     save: SaveHandle,
+    notifier: Option<DownloadNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier).await?;
     let base = open_generated_world(save.data.seed).await?;
     let world = save.data.world(base);
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
