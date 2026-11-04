@@ -1,3 +1,5 @@
+import { ensureWasmPackage } from "@/app/wasm-package";
+
 export interface WorldHandle {
   stop(): void;
   set_ui_enabled(enabled: boolean): void;
@@ -115,6 +117,11 @@ let loading: Promise<RendererModule> | undefined;
 
 function loadRenderer(): Promise<RendererModule> {
   loading ??= (async () => {
+    // The package is served by the service worker from the cache the
+    // client component fills, so both have to be ready before the
+    // import: the worker controlling the page, the package in cache.
+    await waitForServiceWorker();
+    await ensureWasmPackage();
     const renderer: RendererModule = await import(
       /* webpackIgnore: true */ /* turbopackIgnore: true */ MODULE_URL
     );
@@ -171,7 +178,6 @@ async function startWith(
   start: (renderer: RendererModule, resourcesBase: string) => Promise<WorldHandle>,
 ): Promise<WorldHandle> {
   const renderer = await loadRenderer();
-  await waitForServiceWorker();
   const resourcesBase =
     process.env.NEXT_PUBLIC_RESOURCES_BASE_URL ??
     new URL(`${BASE_PATH}/resources`, location.origin).href;
