@@ -75,7 +75,7 @@ fn descriptor(file: &Fetch) -> Result<JsValue, String> {
     set("url", JsValue::from_str(&file.url))?;
     set(
         "key",
-        JsValue::from_str(&pomme_vfs::browser::key(&file.path)),
+        JsValue::from_str(&engine::cache::key(&file.path)),
     )?;
     set("size", JsValue::from_f64(file.size as f64))?;
     set("expected", JsValue::from_str(&file.expected))?;
@@ -132,7 +132,7 @@ impl Transfer for NotifyTransfer {
             descriptors.push(&descriptor(file)?);
         }
         self.notifier
-            .store(&pomme_vfs::browser::cache_name(self.namespace), descriptors)
+            .store(&engine::cache::cache_name(self.namespace), descriptors)
             .await
             .map_err(failure)?;
         let paths: Vec<PathBuf> = missing.iter().map(|file| file.path.clone()).collect();

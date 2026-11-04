@@ -859,6 +859,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
+name = "cache"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "thiserror 2.0.21",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
 name = "calloop"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1145,6 +1155,7 @@ name = "core"
 version = "0.1.0"
 dependencies = [
  "block",
+ "cache",
  "camera",
  "canvas",
  "data",
@@ -4211,6 +4222,7 @@ dependencies = [
  "azalea-registry",
  "base64 0.23.1",
  "bytemuck",
+ "cache",
  "chrono",
  "crossbeam-channel",
  "debugger",
@@ -4316,11 +4328,8 @@ dependencies = [
 name = "pomme-vfs"
 version = "0.1.0"
 dependencies = [
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
+ "cache",
  "wasm_sync",
- "web-sys",
 ]
 
 [[package]]

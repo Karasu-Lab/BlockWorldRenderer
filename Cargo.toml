@@ -17,7 +17,7 @@ replay = ["dep:replayer", "dep:pomme-protocol", "dep:steel-protocol", "dep:steel
 save = ["dep:nbtparser", "dep:zip", "dep:flate2", "dep:pomme-protocol", "dep:steel-protocol", "dep:steel-registry", "dep:steel-utils"]
 
 [dependencies]
-engine = { package = "core", version = "0.1.0", path = "crates/core", features = ["canvas", "debugger", "renderer", "resourcepack", "settings", "shader", "thread", "ui", "wgpu", "worldgen"] }
+engine = { package = "core", version = "0.1.0", path = "crates/core", features = ["cache", "canvas", "debugger", "renderer", "resourcepack", "settings", "shader", "thread", "ui", "wgpu", "worldgen"] }
 
 [profile.release]
 opt-level = "s"

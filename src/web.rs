@@ -2,6 +2,8 @@ use std::io;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Once, PoisonError};
 
+use engine::cache::CacheNotifier;
+use engine::wgpu::backend::RendererProfile;
 use engine::settings::{CameraSettings, ClientSettings, Settings};
 use js_sys::JsString;
 use pomme_client::viewer::assets::{self, Endpoints, HttpTransfer, Progress, Stage};
@@ -151,8 +153,12 @@ async fn prepare(
     version_manifest: Option<String>,
     resources_base: Option<String>,
     notifier: Option<DownloadNotifier>,
+    cache: Option<CacheNotifier>,
 ) -> Result<Prepared, JsError> {
     init_logging();
+    if let Some(cache) = cache {
+        engine::cache::listen(cache);
+    }
     let settings = Settings {
         client: Some(ClientSettings::default()),
         ..Settings::default()
@@ -237,7 +243,7 @@ async fn start_viewer(
     let client = prepared.client;
     let config = ViewerConfig {
         camera,
-        render_distance: client.render_distance,
+        render_distance: RendererProfile::detect().render_distance(client.render_distance),
         dirs: prepared.dirs.dirs,
         asset_index: prepared.dirs.asset_index,
         vsync: client.vsync,
@@ -279,8 +285,9 @@ pub async fn start(
     seed: Option<i64>,
     camera: Option<Vec<f64>>,
     notifier: Option<DownloadNotifier>,
+    cache: Option<CacheNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base, notifier).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier, cache).await?;
     let world = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
 }
@@ -341,8 +348,9 @@ pub async fn start_replay(
     camera: Option<Vec<f64>>,
     replay: &ReplayHandle,
     notifier: Option<DownloadNotifier>,
+    cache: Option<CacheNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base, notifier).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier, cache).await?;
     let base = open_generated_world(seed.unwrap_or_else(default_seed)).await?;
     let world = crate::replay::ReplayWorld::new(base, replay.session.state());
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await
@@ -385,8 +393,9 @@ pub async fn start_save(
     camera: Option<Vec<f64>>,
     save: SaveHandle,
     notifier: Option<DownloadNotifier>,
+    cache: Option<CacheNotifier>,
 ) -> Result<WorldHandle, JsError> {
-    let prepared = prepare(version_manifest, resources_base, notifier).await?;
+    let prepared = prepare(version_manifest, resources_base, notifier, cache).await?;
     let base = open_generated_world(save.data.seed).await?;
     let world = save.data.world(base);
     start_viewer(canvas, prepared, viewer_camera(camera), Arc::new(world)).await

@@ -3,6 +3,7 @@ mod context;
 mod encoder;
 mod helpers;
 mod pipeline;
+mod profile;
 mod push;
 mod registry;
 mod renderer;
@@ -22,6 +23,7 @@ pub use bind::{
 pub use context::browser_supported;
 pub use context::{Context, Frames, MAX_FRAMES_IN_FLIGHT, Swapchain};
 pub use encoder::{CommandEncoder, RenderPassEncoder};
+pub use profile::RendererProfile;
 pub use pipeline::{
     ComputePipeline, PipelineTargets, RenderPipeline, create_compute_pipeline,
     create_render_pipeline, try_create_compute_pipeline, try_create_render_pipeline,
